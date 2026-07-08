@@ -23,3 +23,11 @@ class Board:
             and
             0 <= col < len(self._cells[0])
         )
+
+
+    def __str__(self):
+
+        return "\n".join(
+            " ".join(row)
+            for row in self._cells
+        )

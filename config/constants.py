@@ -13,3 +13,5 @@ VALID_PIECES = {
     "N",
     "P"
 }
+
+MOVE_DURATION = 1500
