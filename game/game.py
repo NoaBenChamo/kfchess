@@ -1,5 +1,5 @@
 from game.clock import GameClock
-
+from movement.rule_factory import RuleFactory
 
 class Game:
 
@@ -37,18 +37,26 @@ class Game:
 
 
     def move_request(self, source, target):
-        # באיטרציה הזאת עדיין אין חוקי שחמט
-        # לכן פשוט מעבירים את הכלי
+
         piece = self._board.get(
             source[0],
             source[1]
         )
+
+
+        rule = RuleFactory.get(piece[1])
+
+
+        if not rule.can_move(source, target):
+            return
+
 
         self._board.set(
             source[0],
             source[1],
             "."
         )
+
 
         self._board.set(
             target[0],
