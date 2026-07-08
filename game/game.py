@@ -1,5 +1,6 @@
 from game.clock import GameClock
 from movement.rule_factory import RuleFactory
+from rules.capture_rule import CaptureRule
 
 class Game:
 
@@ -18,16 +19,34 @@ class Game:
 
         cell = self._board.get(row, col)
 
-        # לחיצה על כלי
-        if cell != ".":
+        # אין כלי נבחר עדיין
+        if self._selected is None:
+
+            if cell != ".":
+                self._selected = (row, col)
+
+            return
+
+
+        # יש כלי נבחר
+
+        selected_piece = self._board.get(
+            self._selected[0],
+            self._selected[1]
+        )
+
+
+        # לחיצה על כלי ידידותי - מחליפים בחירה
+        if (
+            cell != "."
+            and
+            cell[0] == selected_piece[0]
+        ):
             self._selected = (row, col)
             return
 
-        # לחיצה על תא ריק בלי בחירה
-        if self._selected is None:
-            return
 
-        # בקשת תנועה
+        # אחרת מנסים לבצע תנועה
         self.move_request(
             self._selected,
             (row, col)
@@ -43,20 +62,31 @@ class Game:
             source[1]
         )
 
-
         rule = RuleFactory.get(piece[1])
 
-
-        if not rule.can_move(source, target):
+        if not rule.can_move(
+            source,
+            target,
+            self._board
+        ):
             return
 
+        target_piece = self._board.get(
+            target[0],
+            target[1]
+        )
+
+        if not CaptureRule.can_capture(
+            piece,
+            target_piece
+        ):
+            return
 
         self._board.set(
             source[0],
             source[1],
             "."
         )
-
 
         self._board.set(
             target[0],

@@ -3,7 +3,7 @@ from movement.movement_rule import MovementRule
 
 class KingRule(MovementRule):
 
-    def can_move(self, source, target):
+    def can_move(self, source, target, board):
 
         row_diff = abs(target[0] - source[0])
         col_diff = abs(target[1] - source[1])

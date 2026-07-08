@@ -4,7 +4,7 @@ from movement.bishop_rule import BishopRule
 
 class QueenRule:
 
-    def can_move(self, source, target):
+    def can_move(self, source, target, board):
 
         return (
             RookRule().can_move(source, target)

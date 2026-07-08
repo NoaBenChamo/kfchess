@@ -3,7 +3,7 @@ from movement.movement_rule import MovementRule
 
 class KnightRule(MovementRule):
 
-    def can_move(self, source, target):
+    def can_move(self, source, target, board):
 
         row = abs(target[0] - source[0])
         col = abs(target[1] - source[1])
@@ -13,3 +13,4 @@ class KnightRule(MovementRule):
             or
             (row == 1 and col == 2)
         )
+    
