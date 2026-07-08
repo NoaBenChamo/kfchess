@@ -65,6 +65,7 @@ class Game:
         rule = RuleFactory.get(piece[1])
 
         if not rule.can_move(
+            piece,
             source,
             target,
             self._board
