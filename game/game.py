@@ -25,7 +25,8 @@ class Game:
 
         cell = self._board.get(row, col)
 
-
+        if self.is_moving((row,col)):
+            return
         # אין כלי נבחר
         if self._selected is None:
 
@@ -65,9 +66,8 @@ class Game:
 
         # כלי שנמצא כבר בתנועה לא יכול לקבל פקודה חדשה
         for move in self._active_moves:
-            if move.source == source:
+            if move.contains_piece(source):
                 return
-
 
         piece = self._board.get(
             source[0],
@@ -165,3 +165,11 @@ class Game:
     def get_board(self):
 
         return self._board
+    
+    def is_moving(self, position):
+
+        for move in self._active_moves:
+            if move.source == position:
+                return True
+
+        return False
