@@ -4,6 +4,7 @@ from rules.capture_rule import CaptureRule
 from movement.move import Move
 from game.movement_time import MovementTime 
 from movement.movement_validator import MovementValidator
+from rules.game_over_rule import GameOverRule
 
 
 class Game:
@@ -13,10 +14,13 @@ class Game:
         self._clock = GameClock()
         self._selected = None
         self._active_moves = []
+        self._game_over = False
+
 
 
     def click(self, x, y):
-
+        if self._game_over:
+            return
         row = y // 100
         col = x // 100
 
@@ -155,6 +159,8 @@ class Game:
                     move.piece
                 )
 
+                if GameOverRule.is_king_captured(target_piece):
+                    self._game_over = True
 
                 finished_moves.append(move)
 
