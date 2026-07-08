@@ -3,7 +3,7 @@ from movement.rule_factory import RuleFactory
 from rules.capture_rule import CaptureRule
 from movement.move import Move
 from config.constants import MOVE_DURATION
-
+from game.movement_time import MovementTime 
 
 class Game:
 
@@ -106,12 +106,18 @@ class Game:
 
 
 
+        duration = MovementTime.calculate(
+            piece,
+            source,
+            target
+        )
+
         move = Move(
             piece,
             source,
             target,
             self._clock.get_time(),
-            MOVE_DURATION
+            duration
         )
 
 
