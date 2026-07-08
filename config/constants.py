@@ -14,7 +14,7 @@ VALID_PIECES = {
     "P"
 }
 
-MOVE_DURATION = {
+PIECE_SPEED = {
     "K": 1000,
     "Q": 1000,
     "R": 1000,

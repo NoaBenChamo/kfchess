@@ -2,8 +2,9 @@ from game.clock import GameClock
 from movement.rule_factory import RuleFactory
 from rules.capture_rule import CaptureRule
 from movement.move import Move
-from config.constants import MOVE_DURATION
 from game.movement_time import MovementTime 
+from movement.movement_validator import MovementValidator
+
 
 class Game:
 
@@ -25,8 +26,9 @@ class Game:
 
         cell = self._board.get(row, col)
 
-        if self.is_moving((row,col)):
+        if MovementValidator.is_moving(self._active_moves, (row, col)):
             return
+
         # אין כלי נבחר
         if self._selected is None:
 
@@ -90,22 +92,6 @@ class Game:
         ):
             return
 
-
-
-        target_piece = self._board.get(
-            target[0],
-            target[1]
-        )
-
-
-        if not CaptureRule.can_capture(
-            piece,
-            target_piece
-        ):
-            return
-
-
-
         duration = MovementTime.calculate(
             piece,
             source,
@@ -150,7 +136,18 @@ class Game:
                     move.source[1],
                     "."
                 )
+                target_piece = self._board.get(
+                    move.target[0],
+                    move.target[1]
+                )
 
+
+                if not CaptureRule.can_capture(
+                    move.piece,
+                    target_piece
+                ):
+                    finished_moves.append(move)
+                    continue
 
                 self._board.set(
                     move.target[0],
@@ -171,11 +168,21 @@ class Game:
     def get_board(self):
 
         return self._board
-    
-    def is_moving(self, position):
 
-        for move in self._active_moves:
-            if move.source == position:
-                return True
+    def resolve_conflicts(self, moves):
 
-        return False
+        result = []
+
+        occupied_targets = set()
+
+
+        for move in moves:
+
+            if move.target in occupied_targets:
+                continue
+
+            occupied_targets.add(move.target)
+            result.append(move)
+
+
+        return result
