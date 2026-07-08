@@ -6,7 +6,8 @@ from game.movement_time import MovementTime
 from movement.movement_validator import MovementValidator
 from rules.game_over_rule import GameOverRule
 from rules.promotion_rule import PromotionRule
-
+from movement.jump import Jump
+from config.constants import JUMP_DURATION
 
 class Game:
 
@@ -16,6 +17,7 @@ class Game:
         self._selected = None
         self._active_moves = []
         self._game_over = False
+        self._active_jumps = []
 
 
 
@@ -33,6 +35,10 @@ class Game:
 
         if MovementValidator.is_moving(self._active_moves, (row, col)):
             return
+        
+        if self.is_jumping((row, col)):
+            return
+
 
         # אין כלי נבחר
         if self._selected is None:
@@ -134,6 +140,30 @@ class Game:
         for move in self._active_moves:
 
             if move.is_finished(current_time):
+                jump = self.find_jump(move.target, move.piece)
+
+                if jump is not None:
+
+                    # האויב הגיע לכלי שנמצא באוויר
+                    # הכלי הקופץ אוכל אותו ונשאר במקום
+
+                    self._board.set(
+                        move.source[0],
+                        move.source[1],
+                        "."
+                    )
+
+                    self._board.set(
+                        jump.position[0],
+                        jump.position[1],
+                        jump.piece
+                    )
+
+                    self._active_jumps.remove(jump)
+
+                    finished_moves.append(move)
+                    continue
+
 
 
                 self._board.set(
@@ -154,6 +184,8 @@ class Game:
                     finished_moves.append(move)
                     continue
 
+
+
                 self._board.set(
                     move.target[0],
                     move.target[1],
@@ -168,9 +200,20 @@ class Game:
                 finished_moves.append(move)
 
 
+        
+
 
         for move in finished_moves:
             self._active_moves.remove(move)
+
+        finished_jumps = []
+
+        for jump in self._active_jumps:
+            if jump.is_finished(current_time):
+                finished_jumps.append(jump)
+
+        for jump in finished_jumps:
+            self._active_jumps.remove(jump)
 
 
 
@@ -195,3 +238,68 @@ class Game:
 
 
         return result
+    
+    def jump_request(self, position):
+
+        if MovementValidator.is_moving(
+            self._active_moves,
+            position
+        ):
+            return
+        
+        for move in self._active_moves:
+            if move.target == position:
+                return
+
+        piece = self._board.get(position[0], position[1])
+
+        if piece == ".":
+            return
+
+        if self.is_jumping(position):
+            return
+
+        jump = Jump(
+            position,
+            piece,
+            self._clock.get_time(),
+            JUMP_DURATION
+        )
+
+        self._active_jumps.append(jump)
+
+    def is_jumping(self, position):
+
+        for jump in self._active_jumps:
+            if jump.position == position:
+                return True
+
+        return False
+
+
+    def selected_piece(self):
+        return self._selected
+    
+
+    def jump(self, x, y):
+
+        row = y // 100
+        col = x // 100
+
+        if not self._board.is_inside(row, col):
+            return
+
+        self.jump_request((row, col))
+
+    
+    def find_jump(self, position, moving_piece):
+
+        for jump in self._active_jumps:
+
+            if (
+                jump.position == position
+                and jump.piece[0] != moving_piece[0]
+            ):
+                return jump
+
+        return None

@@ -1,5 +1,5 @@
 from commands.commands import *
-
+from jump_command import JumpCommand
 
 class CommandParser:
 
@@ -27,3 +27,9 @@ class CommandParser:
         if parts[0] == "print":
 
             return PrintBoardCommand()
+        
+        if parts[0] == "jump":
+            return JumpCommand(
+                int(parts[1]),
+                int(parts[2])
+            )

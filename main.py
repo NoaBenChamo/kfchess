@@ -8,8 +8,12 @@ from commands.command_parser import CommandParser
 from commands.commands import (
     PrintBoardCommand,
     ClickCommand,
-    WaitCommand
+    WaitCommand,
 )
+
+from commands.jump_command import JumpCommand
+
+
 
 
 
@@ -73,12 +77,21 @@ def main():
                 command.ms
             )
 
+        elif isinstance(command, JumpCommand):
+
+            game.jump(
+                command.x,
+                command.y
+            )
 
         elif isinstance(command, PrintBoardCommand):
 
             BoardPrinter.print(
                 game.get_board()
             )
+
+
+        
 
 
 

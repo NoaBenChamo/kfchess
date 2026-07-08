@@ -32,3 +32,5 @@ PAWN_PROMOTION_ROW = {
     "w": 0,
     "b": 7
 }
+
+JUMP_DURATION = 1000
