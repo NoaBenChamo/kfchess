@@ -1,3 +1,5 @@
+from config.constants import PAWN_START_ROW
+
 class PawnRule:
 
 
@@ -16,12 +18,21 @@ class PawnRule:
 
         # תנועה רגילה קדימה
         if col_diff == 0:
+            if row_diff == direction and target_piece == ".":
+                return True
+
+            board_rows = len(board.get_rows())
+            start_row = board_rows - 1 if piece[0] == "w" else 0
+
+            middle = board.get(source[0] + direction, source[1])
 
             return (
-                row_diff == direction
-                and
-                target_piece == "."
+                row_diff == 2 * direction
+                and source[0] == start_row
+                and target_piece == "."
+                and middle == "."
             )
+
 
 
         # אכילה באלכסון

@@ -22,3 +22,13 @@ PIECE_SPEED = {
     "N": 1000,
     "P": 1000,
 }
+
+PAWN_START_ROW = {
+    "w": 6,
+    "b": 1
+}
+
+PAWN_PROMOTION_ROW = {
+    "w": 0,
+    "b": 7
+}

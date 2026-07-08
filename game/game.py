@@ -5,6 +5,7 @@ from movement.move import Move
 from game.movement_time import MovementTime 
 from movement.movement_validator import MovementValidator
 from rules.game_over_rule import GameOverRule
+from rules.promotion_rule import PromotionRule
 
 
 class Game:
@@ -158,6 +159,8 @@ class Game:
                     move.target[1],
                     move.piece
                 )
+                if PromotionRule.should_promote(move.piece, move.target, self._board):
+                    self._board.set(move.target[0], move.target[1], move.piece[0] + "Q")
 
                 if GameOverRule.is_king_captured(target_piece):
                     self._game_over = True
