@@ -1,8 +1,9 @@
-from movement.king_rule import KingRule
-from movement.queen_rule import QueenRule
-from movement.rook_rule import RookRule
-from movement.bishop_rule import BishopRule
-from movement.knight_rule import KnightRule
+from movement.piece_rules.king_rule import KingRule
+from movement.piece_rules.queen_rule import QueenRule
+from movement.piece_rules.rook_rule import RookRule
+from movement.piece_rules.bishop_rule import BishopRule
+from movement.piece_rules.knight_rule import KnightRule
+from movement.piece_rules.pawn_rule import PawnRule
 
 
 class RuleFactory:
@@ -12,7 +13,8 @@ class RuleFactory:
         "Q": QueenRule(),
         "R": RookRule(),
         "B": BishopRule(),
-        "N": KnightRule()
+        "N": KnightRule(),
+        "P": PawnRule()
     }
 
 

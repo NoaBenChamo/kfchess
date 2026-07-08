@@ -4,7 +4,7 @@ from movement.path_checker import PathChecker
 class RookRule:
 
 
-    def can_move(self, source, target, board):
+    def can_move(self, piece, source, target, board):
 
         straight = (
             source[0] == target[0]

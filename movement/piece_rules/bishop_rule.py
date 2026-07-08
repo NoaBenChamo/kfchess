@@ -3,7 +3,7 @@ from movement.path_checker import PathChecker
 
 class BishopRule:
 
-    def can_move(self, source, target, board):
+    def can_move(self, piece, source, target, board):
 
         diagonal = (
             abs(target[0] - source[0])

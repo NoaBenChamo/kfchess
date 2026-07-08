@@ -1,9 +1,9 @@
-from movement.movement_rule import MovementRule
+from movement.piece_rules.movement_rule import MovementRule
 
 
 class KnightRule(MovementRule):
 
-    def can_move(self, source, target, board):
+    def can_move(self, piece, source, target, board):
 
         row = abs(target[0] - source[0])
         col = abs(target[1] - source[1])
