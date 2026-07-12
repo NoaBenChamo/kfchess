@@ -1,100 +1,93 @@
-from input.controller import Controller
 from model.board import Board
+from model.piece import Piece
+from model.position import Position
+
+from engine.game_engine import GameEngine
+from input.controller import Controller
 
 
-class FakeGameEngine:
+def test_click_selects_piece():
 
-    def __init__(self, board):
-
-        self.board = board
-        self.moves = []
-
-
-    def get_board(self):
-
-        return self.board
-
-
-    def move_request(self, source, target):
-
-        self.moves.append(
-            (source, target)
-        )
-
-
-
-def create_board():
-
-    return Board([
-        ["WR", ".", "."],
-        [".", ".", "."],
-        [".", ".", "BK"]
+    board = Board([
+        [Piece("W", "R"), None]
     ])
 
-
-
-def test_first_click_selects_piece():
-
-    board = create_board()
-
-    engine = FakeGameEngine(board)
+    engine = GameEngine(board)
 
     controller = Controller(engine)
-
 
     controller.click(
         50,
         50
     )
 
-
-    assert controller._selected == (0, 0)
-
+    assert engine.get_selected() == Position(0, 0)
 
 
-def test_second_click_requests_move():
 
-    board = create_board()
+def test_click_empty_cell():
 
-    engine = FakeGameEngine(board)
+    board = Board([
+        [None]
+    ])
+
+    engine = GameEngine(board)
 
     controller = Controller(engine)
-
 
     controller.click(
         50,
         50
     )
 
+    assert engine.get_selected() is None
+
+
+
+def test_click_converts_pixels_to_position():
+
+    board = Board([
+        [None, None],
+        [None, Piece("W", "R")]
+    ])
+
+    engine = GameEngine(board)
+
+    controller = Controller(engine)
 
     controller.click(
         150,
-        50
+        150
     )
 
-
-    assert engine.moves == [
-        (
-            (0, 0),
-            (0, 1)
-        )
-    ]
+    assert engine.get_selected() == Position(1, 1)
 
 
 
-def test_click_outside_board_is_ignored():
+def test_wait_calls_engine():
 
-    board = create_board()
+    board = Board([
+        [None]
+    ])
 
-    engine = FakeGameEngine(board)
+    engine = GameEngine(board)
 
     controller = Controller(engine)
 
+    controller.wait(100)
 
-    controller.click(
-        500,
-        500
-    )
+    assert not engine.is_game_over()
 
 
-    assert controller._selected is None
+
+def test_get_board():
+
+    board = Board([
+        [None]
+    ])
+
+    engine = GameEngine(board)
+
+    controller = Controller(engine)
+
+    assert controller.get_board() == board

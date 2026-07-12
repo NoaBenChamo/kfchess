@@ -1,8 +1,11 @@
 class GameOverRule:
 
+
     @staticmethod
-    def is_king_captured(target_piece):
+    def is_king_captured(piece):
+
         return (
-            len(target_piece) > 1
-            and target_piece[1] == "K"
+            piece is not None
+            and
+            piece.type == "K"
         )

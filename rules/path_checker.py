@@ -1,23 +1,25 @@
+from model.position import Position
+
 class PathChecker:
 
     @staticmethod
     def clear(board, source, target):
 
         row_step = PathChecker.step(
-            target[0] - source[0]
+            target.row - source.row
         )
 
         col_step = PathChecker.step(
-            target[1] - source[1]
+            target.col - source.col
         )
 
-        row = source[0] + row_step
-        col = source[1] + col_step
+        row = source.row + row_step
+        col = source.col + col_step
 
 
-        while (row, col) != target:
+        while (row, col) != (target.row, target.col):
 
-            if board.get(row, col) != ".":
+            if board.get(Position(row, col)) is not None:
                 return False
 
             row += row_step

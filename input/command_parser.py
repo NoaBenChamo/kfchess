@@ -1,30 +1,54 @@
-from input.commands import ClickCommand, WaitCommand, PrintBoardCommand
+from input.commands import (
+    ClickCommand,
+    WaitCommand,
+    PrintCommand
+)
+
 from input.jump_command import JumpCommand
 
 
+
 class CommandParser:
+
 
     @staticmethod
     def parse(line):
 
         parts = line.split()
 
-        if parts[0] == "click":
+        if not parts:
+            return None
+
+
+        command = parts[0]
+
+
+        if command == "click":
+
             return ClickCommand(
                 int(parts[1]),
                 int(parts[2])
             )
 
-        if parts[0] == "wait":
+
+        if command == "wait":
+
             return WaitCommand(
                 int(parts[1])
             )
 
-        if parts[0] == "print":
-            return PrintBoardCommand()
 
-        if parts[0] == "jump":
+        if command == "print":
+
+            return PrintCommand()
+
+
+        if command == "jump":
+
             return JumpCommand(
                 int(parts[1]),
                 int(parts[2])
             )
+
+
+        return None

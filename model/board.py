@@ -8,26 +8,44 @@ class Board:
         return self._cells
 
 
-    def get(self, row, col):
-        return self._cells[row][col]
+    def get(self, position):
+
+        return self._cells[
+            position.row
+        ][
+            position.col
+        ]
 
 
-    def set(self, row, col, value):
-        self._cells[row][col] = value
+    def set(self, position, value):
+
+        self._cells[
+            position.row
+        ][
+            position.col
+        ] = value
 
 
-    def is_inside(self, row, col):
+    def is_inside(self, position):
 
         return (
-            0 <= row < len(self._cells)
+            0 <= position.row < len(self._cells)
             and
-            0 <= col < len(self._cells[0])
+            0 <= position.col < len(self._cells[0])
         )
 
 
     def __str__(self):
 
-        return "\n".join(
-            " ".join(row)
-            for row in self._cells
-        )
+        result = []
+
+        for row in self._cells:
+
+            result.append(
+                " ".join(
+                    "." if piece is None else str(piece)
+                    for piece in row
+                )
+            )
+
+        return "\n".join(result)

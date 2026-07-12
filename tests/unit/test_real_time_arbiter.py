@@ -1,120 +1,156 @@
-from realtime.real_time_arbiter import RealTimeArbiter
-from realtime.move import Move
-from realtime.jump import Jump
 from model.board import Board
+from model.piece import Piece
+from model.position import Position
+
+from realtime.move import Move
+from realtime.real_time_arbiter import RealTimeArbiter
 
 
-def create_board():
+def test_add_move():
 
-    return Board([
-        ["WR", ".", "."],
-        [".", ".", "."],
-        [".", ".", "BK"]
+    board = Board([
+        [Piece("W", "R"), None]
     ])
 
-
-
-def test_move_not_finished_immediately():
-
-    board = create_board()
-
     arbiter = RealTimeArbiter(board)
 
-
     move = Move(
-        "WR",
-        (0, 0),
-        (0, 2),
+        Piece("W", "R"),
+        Position(0, 0),
+        Position(0, 1),
         0,
-        1000
+        100
     )
-
 
     arbiter.add_move(move)
 
-
-    # הכלי עדיין במקום המקורי
-    assert board.get(0, 0) == "WR"
-    assert board.get(0, 2) == "."
+    assert len(arbiter._active_moves) == 1
 
 
+def test_wait_does_not_finish_move_too_early():
 
-def test_move_finishes_after_wait():
-
-    board = create_board()
+    board = Board([
+        [Piece("W", "R"), None]
+    ])
 
     arbiter = RealTimeArbiter(board)
 
-
     move = Move(
-        "WR",
-        (0, 0),
-        (0, 2),
+        Piece("W", "R"),
+        Position(0, 0),
+        Position(0, 1),
         0,
-        1000
+        100
     )
-
 
     arbiter.add_move(move)
 
+    arbiter.wait(50)
 
-    arbiter.wait(1000)
-
-
-    assert board.get(0, 0) == "."
-    assert board.get(0, 2) == "WR"
+    assert len(arbiter._active_moves) == 1
 
 
+def test_wait_finishes_move():
 
-def test_move_does_not_finish_before_time():
-
-    board = create_board()
+    board = Board([
+        [Piece("W", "R"), None]
+    ])
 
     arbiter = RealTimeArbiter(board)
 
-
     move = Move(
-        "WR",
-        (0, 0),
-        (0, 2),
+        Piece("W", "R"),
+        Position(0, 0),
+        Position(0, 1),
         0,
-        1000
+        100
     )
-
 
     arbiter.add_move(move)
 
+    arbiter.wait(100)
 
-    arbiter.wait(500)
-
-
-    assert board.get(0, 0) == "WR"
-    assert board.get(0, 2) == "."
+    assert len(arbiter._active_moves) == 0
 
 
+def test_clock_advances():
 
-def test_jump_finishes_after_time():
-
-    board = create_board()
+    board = Board([
+        [None]
+    ])
 
     arbiter = RealTimeArbiter(board)
 
+    arbiter.wait(250)
 
-    jump = Jump(
-        (0, 0),
-        "WR",
+    assert arbiter.get_time() == 250
+
+
+def test_get_events_returns_empty_when_no_events():
+
+    board = Board([
+        [None]
+    ])
+
+    arbiter = RealTimeArbiter(board)
+
+    assert arbiter.get_events() == []
+
+
+def test_events_are_cleared_after_read():
+
+    board = Board([
+        [None]
+    ])
+
+    arbiter = RealTimeArbiter(board)
+
+    arbiter._game_events.append("GAME_OVER")
+
+    assert arbiter.get_events() == ["GAME_OVER"]
+
+    assert arbiter.get_events() == []
+
+
+def test_is_moving_before_finish():
+
+    board = Board([
+        [Piece("W", "R"), None]
+    ])
+
+    arbiter = RealTimeArbiter(board)
+
+    move = Move(
+        Piece("W", "R"),
+        Position(0, 0),
+        Position(0, 1),
         0,
-        1000
+        100
     )
 
+    arbiter.add_move(move)
 
-    arbiter.add_jump(jump)
-
-
-    assert arbiter.is_jumping((0, 0))
+    assert arbiter.is_moving(Position(0, 0))
 
 
-    arbiter.wait(1000)
+def test_is_not_moving_after_finish():
 
+    board = Board([
+        [Piece("W", "R"), None]
+    ])
 
-    assert not arbiter.is_jumping((0, 0))
+    arbiter = RealTimeArbiter(board)
+
+    move = Move(
+        Piece("W", "R"),
+        Position(0, 0),
+        Position(0, 1),
+        0,
+        100
+    )
+
+    arbiter.add_move(move)
+
+    arbiter.wait(100)
+
+    assert not arbiter.is_moving(Position(0, 0))

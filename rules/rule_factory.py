@@ -1,14 +1,14 @@
-from rules.king_rule import KingRule
-from rules.queen_rule import QueenRule
-from rules.rook_rule import RookRule
-from rules.bishop_rule import BishopRule
-from rules.knight_rule import KnightRule
-from rules.pawn_rule import PawnRule
+from rules.piece_rules.king_rule import KingRule
+from rules.piece_rules.queen_rule import QueenRule
+from rules.piece_rules.rook_rule import RookRule
+from rules.piece_rules.bishop_rule import BishopRule
+from rules.piece_rules.knight_rule import KnightRule
+from rules.piece_rules.pawn_rule import PawnRule
 
 
 class RuleFactory:
 
-    rules = {
+    _rules = {
         "K": KingRule(),
         "Q": QueenRule(),
         "R": RookRule(),
@@ -17,6 +17,8 @@ class RuleFactory:
         "P": PawnRule()
     }
 
+
     @staticmethod
     def get(piece_type):
-        return RuleFactory.rules[piece_type]
+
+        return RuleFactory._rules[piece_type]

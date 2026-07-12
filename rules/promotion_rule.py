@@ -1,9 +1,19 @@
-
-
 class PromotionRule:
 
-    @staticmethod
-    def should_promote(piece, target, board):
-        last_row = 0 if piece[0] == "w" else len(board.get_rows()) - 1
-        return piece[1] == "P" and target[0] == last_row
 
+    @staticmethod
+    def should_promote(piece, position, board):
+
+        if piece is None:
+            return False
+
+
+        if piece.type != "P":
+            return False
+
+
+        if piece.color == "W":
+            return position.row == 0
+
+
+        return position.row == len(board.get_rows()) - 1

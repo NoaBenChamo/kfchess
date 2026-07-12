@@ -1,43 +1,70 @@
+from input.commands import (
+    ClickCommand,
+    WaitCommand,
+    PrintCommand
+)
+
+from input.jump_command import JumpCommand
+
+from board_io.board_printer import BoardPrinter
+
+
+
 class ScriptRunner:
 
 
-    def __init__(self, controller, game):
+    def __init__(
+        self,
+        controller
+    ):
 
         self._controller = controller
-        self._game = game
 
 
 
     def run(self, commands):
 
-        output = []
-
 
         for command in commands:
 
 
-            if command[0] == "click":
+            if isinstance(
+                command,
+                ClickCommand
+            ):
 
                 self._controller.click(
-                    command[1],
-                    command[2]
+                    command.x,
+                    command.y
                 )
 
 
-            elif command[0] == "wait":
+            elif isinstance(
+                command,
+                WaitCommand
+            ):
 
-                self._game.wait(
-                    command[1]
+                self._controller.wait(
+                    command.ms
                 )
 
 
-            elif command[0] == "print":
+            elif isinstance(
+                command,
+                PrintCommand
+            ):
 
-                output.append(
-                    str(
-                        self._game.get_board()
-                    )
+                BoardPrinter.print(
+                    self._controller.get_board()
                 )
 
 
-        return output
+            elif isinstance(
+                command,
+                JumpCommand
+            ):
+
+                self._controller.jump(
+                    command.x,
+                    command.y
+                )

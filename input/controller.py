@@ -1,54 +1,57 @@
-from input.board_mapper import BoardMapper
+from model.position import Position
+
 
 
 class Controller:
 
+
     def __init__(self, game_engine):
 
         self._game_engine = game_engine
+
         self._selected = None
 
 
 
     def click(self, x, y):
 
-        position = BoardMapper.to_position(
-            x,
-            y
+        position = Position(
+            y // 100,
+            x // 100
         )
-
-
-        board = self._game_engine.get_board()
-
-
-        if not board.is_inside(
-            position[0],
-            position[1]
-        ):
-            return
-
 
 
         if self._selected is None:
 
-            piece = board.get(
-                position[0],
-                position[1]
+            self._game_engine.select(
+                position
             )
 
+            self._selected = position
 
-            if piece != ".":
-                self._selected = position
+        else:
+
+            self._game_engine.move_request(
+                position
+            )
+
+            self._selected = None
 
 
-            return
+
+    def wait(self, ms):
+
+        self._game_engine.wait(ms)
 
 
 
-        self._game_engine.move_request(
-            self._selected,
-            position
+    def get_board(self):
+
+        return self._game_engine.get_board()
+    
+    def jump(self, x, y):
+
+        self._game_engine.jump(
+            x,
+            y
         )
-
-
-        self._selected = None

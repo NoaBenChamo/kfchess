@@ -1,3 +1,6 @@
+from input.command_parser import CommandParser
+
+
 class ScriptParser:
 
 
@@ -6,48 +9,27 @@ class ScriptParser:
 
         commands = []
 
+        reading = False
+
 
         for line in lines:
 
             line = line.strip()
 
 
-            if not line:
+            if line == "Commands:":
+                reading = True
                 continue
 
 
-            parts = line.split()
+            if reading and line:
 
-
-            command = parts[0]
-
-
-            if command == "click":
-
-                commands.append(
-                    (
-                        "click",
-                        int(parts[1]),
-                        int(parts[2])
-                    )
+                command = CommandParser.parse(
+                    line
                 )
 
-
-            elif command == "wait":
-
-                commands.append(
-                    (
-                        "wait",
-                        int(parts[1])
-                    )
-                )
-
-
-            elif command == "print":
-
-                commands.append(
-                    ("print",)
-                )
+                if command is not None:
+                    commands.append(command)
 
 
         return commands
