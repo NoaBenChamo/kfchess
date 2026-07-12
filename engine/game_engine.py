@@ -21,77 +21,6 @@ class Game:
         self._arbiter = RealTimeArbiter(board)
 
 
-
-    def click(self, x, y):
-
-        if self._state.is_game_over():
-            return
-
-
-        row = y // 100
-        col = x // 100
-
-
-        board = self._state.get_board()
-
-
-        if not board.is_inside(row, col):
-            return
-
-
-        position = (row, col)
-
-
-        if self._arbiter.is_moving(position):
-            return
-
-
-        if self._arbiter.is_jumping(position):
-            return
-
-
-        cell = board.get(row, col)
-
-
-        selected = self._state.get_selected()
-
-
-        if selected is None:
-
-            if cell != ".":
-                self._state.set_selected(position)
-
-            return
-
-
-
-        selected_piece = board.get(
-            selected[0],
-            selected[1]
-        )
-
-
-        if (
-            cell != "."
-            and
-            cell[0] == selected_piece[0]
-        ):
-
-            self._state.set_selected(position)
-            return
-
-
-
-        self.move_request(
-            selected,
-            position
-        )
-
-
-        self._state.set_selected(None)
-
-
-
     def move_request(self, source, target):
 
         board = self._state.get_board()
@@ -146,9 +75,3 @@ class Game:
     def get_board(self):
 
         return self._state.get_board()
-
-
-
-    def selected_piece(self):
-
-        return self._state.get_selected()
