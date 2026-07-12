@@ -72,6 +72,6 @@ class Game:
 
 
 
-    def get_board(self):
+def get_snapshot(self):
 
-        return self._state.get_board()
+    return self._state.snapshot()
