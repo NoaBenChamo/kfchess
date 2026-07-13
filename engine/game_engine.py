@@ -74,7 +74,9 @@ class GameEngine:
             self._selected = None
             return
 
-
+        if self._arbiter.is_piece_moving(source):
+            self._selected = None
+            return
 
         duration = MovementTime.calculate(
             piece,

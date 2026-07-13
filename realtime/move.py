@@ -13,6 +13,8 @@ class Move:
         self.source = source
         self.target = target
 
+        self.start_time = start_time
+
         self.arrival_time = (
             start_time + duration
         )

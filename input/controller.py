@@ -13,6 +13,8 @@ class Controller:
 
 
 
+
+
     def click(self, x, y):
 
         position = Position(
@@ -21,21 +23,13 @@ class Controller:
         )
 
 
-        if self._selected is None:
+        if self._game_engine.get_selected() is None:
 
-            self._game_engine.select(
-                position
-            )
-
-            self._selected = position
+            self._game_engine.select(position)
 
         else:
 
-            self._game_engine.move_request(
-                position
-            )
-
-            self._selected = None
+            self._game_engine.move_request(position)
 
 
 
