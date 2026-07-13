@@ -1,0 +1,26 @@
+[33m10dffb8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{0}: checkout: moving from 26c44f4f23f5daca4736cfb42e731a897a2f939c to main
+[33m26c44f4[m HEAD@{1}: commit: Add unit tests
+[33mf9b9061[m HEAD@{2}: commit: refactor: add text script runner layer
+[33m148b086[m HEAD@{3}: commit: refactor: add game snapshot for view separation
+[33mba9e99e[m HEAD@{4}: commit: refactor: move click handling into controller
+[33mbb18635[m HEAD@{5}: commit: refactor: move realtime logic into arbiter
+[33m5c877fd[m HEAD@{6}: commit: refactor: extract game state model
+[33meebf7bf[m HEAD@{7}: commit: Reorganize project structure into layers
+[33m10dffb8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{8}: checkout: moving from main to 10dffb80f42b98ae35a6daf27cae530d444247e2
+[33m10dffb8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{9}: commit: Reorganize project structure
+[33m8f39adb[m HEAD@{10}: commit: Add architecture design to README
+[33mdc057d4[m HEAD@{11}: commit: Iteration 11: A jumping piece captures mid-air.
+[33m8606cab[m HEAD@{12}: commit: Iteration 10: Update pawn movement and promotion
+[33mce4cb28[m HEAD@{13}: commit: Iteration 9: Game over rule
+[33mff624b0[m HEAD@{14}: commit: Iteration 8: add piece movement validation
+[33maca5455[m HEAD@{15}: commit: Add configurable piece movement time
+[33m2a744d6[m HEAD@{16}: commit: Iteration 7: Add moving piece restrictions
+[33m90871b2[m HEAD@{17}: commit: Iteration 6: Add timed piece movement
+[33m7466fee[m HEAD@{18}: commit: Iteration 5: Add pawn movement rules
+[33m7a4d693[m HEAD@{19}: commit: Iteration 5: Add pawn movement rules
+[33m66ade8b[m HEAD@{20}: commit: Iteration 4: Add blockers and capture rules
+[33m2603188[m HEAD@{21}: commit: Iteration 3: Add basic piece movement rules
+[33m9f7a90d[m HEAD@{22}: commit: Iteration 2: Implement click wait and print commands
+[33m25fa4ca[m HEAD@{23}: commit: Iteration 1: parse and validate chess board
+[33m02c98e6[m HEAD@{24}: commit: Create initial project structure
+[33me74f241[m HEAD@{25}: clone: from https://github.com/NoaBenChamo/kfchess.git

@@ -20,51 +20,33 @@ class ScriptRunner:
 
         self._controller = controller
 
-
-
     def run(self, commands):
-
 
         for command in commands:
 
-
-            if isinstance(
-                command,
-                ClickCommand
-            ):
+            if isinstance(command, ClickCommand):
 
                 self._controller.click(
                     command.x,
                     command.y
                 )
 
-
-            elif isinstance(
-                command,
-                WaitCommand
-            ):
+            elif isinstance(command, WaitCommand):
 
                 self._controller.wait(
                     command.ms
                 )
 
-
-            elif isinstance(
-                command,
-                PrintCommand
-            ):
+            elif isinstance(command, PrintCommand):
 
                 BoardPrinter.print(
                     self._controller.get_board()
                 )
 
-
-            elif isinstance(
-                command,
-                JumpCommand
-            ):
+            elif isinstance(command, JumpCommand):
 
                 self._controller.jump(
                     command.x,
                     command.y
                 )
+
