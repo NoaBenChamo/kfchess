@@ -1,6 +1,7 @@
 class Renderer:
 
 
+    # מצייר את מצב המשחק הנוכחי על המסך
     def render(self, snapshot):
 
         board = snapshot.get_board()

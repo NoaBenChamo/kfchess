@@ -1,8 +1,9 @@
 from realtime.clock import GameClock
+from realtime.crossing_detector import CrossingDetector
 from realtime.movement_validator import MovementValidator
-
 from rules.capture_rule import CaptureRule
 from rules.game_over_rule import GameOverRule
+from rules.path_checker import PathChecker
 from rules.promotion_rule import PromotionRule
 
 
@@ -12,39 +13,46 @@ class RealTimeArbiter:
     def __init__(self, board):
 
         self._board = board
-
         self._clock = GameClock()
-
         self._active_moves = []
-
         self._active_jumps = []
-
         self._game_events = []
+        self._landed_via_move = {}  
 
 
-
+    # מוסיף תנועה פעילה לרשימת התנועות
     def add_move(self, move):
-
         self._active_moves.append(move)
 
 
+    # מוסיף קפיצה פעילה לרשימת הקפיצות
+    def add_jump(self, jump):
+        self._active_jumps.append(jump)
 
+
+    # מקדם את השעון ומעבד את כל התנועות והקפיצות שהסתיימו
     def wait(self, ms):
 
         self._clock.advance(ms)
+        # זיהוי ופתרון התנגשויות בין תנועות חוצות
+        CrossingDetector.detect_and_resolve(
+            self._active_moves,
+            self._board
+        )
 
+        # נחיתת תנועות שהסתיימו
         self.resolve_finished_moves()
 
+        # ניקוי קפיצות שהסתיימו
         self.resolve_finished_jumps()
 
 
-
+    # מחזיר את הזמן הנוכחי של השעון
     def get_time(self):
-
         return self._clock.get_time()
 
 
-
+    # בודק אם כלי במיקום נתון נמצא כרגע בתנועה
     def is_moving(self, position):
 
         return MovementValidator.is_moving(
@@ -53,234 +61,196 @@ class RealTimeArbiter:
         )
 
 
-
+    # מעבד את כל התנועות שהסתיימו ומנחית אותן על הלוח
     def resolve_finished_moves(self):
 
         current_time = self._clock.get_time()
 
-        finished = []
+        # איסוף כל התנועות שהגיעו ליעדן
+        finished = [
+            move for move in self._active_moves
+            if move.is_finished(current_time)
+        ]
 
+        self.resolve_arrivals(finished)
 
-        for move in self._active_moves:
-
-            if move.is_finished(current_time):
-
-                finished.append(move)
-
-
-        self.resolve_collisions(finished)
-
-
+        # הסרת התנועות השלמות מהרשימה הפעילה
         for move in finished:
-
             if move in self._active_moves:
-
                 self._active_moves.remove(move)
 
 
-    def resolve_move(self, move):
 
-        print(
-            "MOVE:",
-            move.piece,
-            "arrival:",
-            move.arrival_time
+    # מעבד את התנועות השלמות לפי סדר זמן הגעה
+    def resolve_arrivals(self, finished_moves):
+
+        # מיון לפי זמן הגעה ואחר כך לפי move_id במקרה שווה
+        sorted_moves = sorted(
+            finished_moves,
+            key=lambda m: (m.arrival_time, m.move_id)
         )
 
-        collision = None
-
-        for other in self._active_moves:
-
-            if other == move:
-                continue
-
-
-            if other.target == move.target:
-
-                collision = other
-                break
+        for move in sorted_moves:
+            self.resolve_single_arrival(move)
 
 
 
-        if collision is None:
+    # מנחית תנועה אחת על הלוח תוך טיפול בהתנגשויות עם כלים אחרים
+    def resolve_single_arrival(self, move):
 
-            self.finish_move(move)
+        target_piece = self._board.get(move.target)
 
+        # תא ריק — נחיתה רגילה
+        if target_piece is None:
+            self.finish_move_at(move, move.target)
             return
 
+        # כלי ידיד ביעד — עצירה לפני התא החסום
+        if target_piece.color == move.piece.color:
 
-
-        # כלים בצבעים שונים:
-        if move.piece.color != collision.piece.color:
-
-
-            if move.arrival_time >= collision.arrival_time:
-
-                self.finish_move(move)
-
-            else:
-
-                self.finish_move(collision)
-
-
-
-        # כלים באותו צבע:
-        else:
-
-            if move.arrival_time > collision.arrival_time:
-
-                return
-
-            else:
-
-                self.finish_move(move)
-
-
-
-    def finish_move(self, move):
-
-        target_piece = self._board.get(
-            move.target
-        )
-
-
-        if target_piece is not None:
-
-            if not CaptureRule.can_capture(
-                move.piece,
-                target_piece
-            ):
-
-                return
-
-
-
-        self._board.set(
-            move.source,
-            None
-        )
-
-
-        self._board.set(
-            move.target,
-            move.piece
-        )
-
-
-
-        if PromotionRule.should_promote(
-            move.piece,
-            move.target,
-            self._board
-        ):
-
-            move.piece.type = "Q"
-
-
-
-        if GameOverRule.is_king_captured(
-            target_piece
-        ):
-
-            self._game_events.append(
-                "GAME_OVER"
+            stop_cell = PathChecker.find_last_free_cell(
+                move.source,
+                move.target,
+                self._board,
+                self._active_moves,
+                move.arrival_time
             )
 
+            if stop_cell is not None:
+                self.finish_move_at(move, stop_cell)
+            return
+
+        # כלי אויב ביעד — אכילה
+        self.finish_move_at(move, move.target)
 
 
+
+    # מנחית כלי במיקום סופי ומעדכן את הלוח בהתאם
+    def finish_move_at(self, move, position):
+
+        target_piece = self._board.get(position)
+
+        # בדיקת אכילה סופית
+        if target_piece is not None:
+            if not CaptureRule.can_capture(move.piece, target_piece):
+                return
+
+        # ניקוי תא המקור רק אם אין תנועה אחרת שיוצאת מאותה תא
+        other_uses_source = any(
+            m for m in self._active_moves
+            if m is not move and m.source == move.source
+        )
+
+        if not other_uses_source:
+            self._board.set(move.source, None)
+
+        # נחיתת הכלי במיקום היעד
+        self._board.set(position, move.piece)
+
+        # רישום נחיתה לצורך טיפול בקפיצות
+        self._landed_via_move[position] = move.source
+
+        # בדיקת קידום רגלי
+        if PromotionRule.should_promote(move.piece, position, self._board):
+            move.piece.type = "Q"
+
+        # בדיקה אם נלכד מלך
+        if GameOverRule.is_king_captured(target_piece):
+            self._game_events.append("GAME_OVER")
+
+
+    # מעבד קפיצות שהסתיימו ומחזיר את הכלי ללוח
     def resolve_finished_jumps(self):
 
         current_time = self._clock.get_time()
 
-        finished = []
+        # איסוף כל הקפיצות שהסתיימו
+        finished = [
+            jump for jump in self._active_jumps
+            if jump.is_finished(current_time)
+        ]
 
-
-        for jump in self._active_jumps:
-
-            if jump.is_finished(current_time):
-
-                finished.append(jump)
-
-
-
+        # נחיתת כל קפיצה והסרתה מהרשימה
         for jump in finished:
-
+            self._land_jump(jump)
             self._active_jumps.remove(jump)
 
 
+    # מנחית כלי קופץ בחזרה למקומו ומטפל בהתנגשויות
+    def _land_jump(self, jump):
 
+        piece_on_square = self._board.get(jump.position)
+
+        # תא ריק — נחיתה רגילה
+        if piece_on_square is None:
+            self._board.set(jump.position, jump.piece)
+            return
+
+        # כלי ידיד הגיע בזמן הקפיצה — דוחפים אותו אחור
+        if piece_on_square.color == jump.piece.color:
+
+            friendly_move = self._find_move_at(jump.position)
+
+            if friendly_move is not None:
+                stop = PathChecker.find_last_free_cell(
+                    friendly_move.source,
+                    jump.position,
+                    self._board,
+                    self._active_moves,
+                    friendly_move.arrival_time
+                )
+
+                if stop is not None:
+                    self._board.set(stop, piece_on_square)
+
+            # פינוי התא ונחיתת הקופץ
+            self._board.set(jump.position, None)
+            self._board.set(jump.position, jump.piece)
+            return
+
+        # כלי אויב בתא — אכילה
+        self._board.set(jump.position, jump.piece)
+
+        if GameOverRule.is_king_captured(piece_on_square):
+            self._game_events.append("GAME_OVER")
+
+
+    # מחזיר את האירועים שנצברו ומנקה את הרשימה
     def get_events(self):
 
         events = self._game_events[:]
-
         self._game_events.clear()
-
         return events
-    
 
+
+    # בודק אם כלי במיקום נתון נמצא כרגע בתנועה פעילה
     def is_piece_moving(self, position):
 
         for move in self._active_moves:
-
             if move.source == position:
                 return True
 
         return False
-    
 
 
-    def resolve_collisions(self, moves):
-
-        handled = set()
-
-
-        for move in moves:
-
-            if move in handled:
-                continue
+    # מחזיר עותק של רשימת התנועות הפעילות
+    def get_active_moves(self):
+        return list(self._active_moves)
 
 
-            opponent = None
+    # בודק אם כלי נחת במיקום זה בעקבות תנועה
+    def was_landed_via_move(self, position):
+        return position in self._landed_via_move
 
 
-            for other in moves:
-
-                if other == move:
-                    continue
-
-
-                if other.target == move.target:
-
-                    opponent = other
-                    break
+    # מחזיר את מיקום המקור של התנועה שנחתה במיקום זה
+    def get_landing_source(self, position):
+        return self._landed_via_move.get(position)
 
 
-            if opponent is None:
-
-                self.finish_move(move)
-                handled.add(move)
-                continue
-
-
-            # צבעים שונים
-            if move.piece.color != opponent.piece.color:
-
-                if move.arrival_time > opponent.arrival_time:
-
-                    self.finish_move(move)
-
-                else:
-
-                    self.finish_move(opponent)
-
-
-            # אותו צבע
-            else:
-
-                if move.arrival_time < opponent.arrival_time:
-
-                    self.finish_move(move)
-
-
-            handled.add(move)
-            handled.add(opponent)
+    # מחזיר את התנועה הפעילה שיעדה למיקום זה, או None
+    def _find_move_at(self, position):
+        for move in self._active_moves:
+            if move.target == position:
+                return move
+        return None

@@ -1,9 +1,19 @@
 from rules.piece_rules.movement_rule import MovementRule
 
-
+#חוקיות ההזזה של הסוס
 class KnightRule(MovementRule):
 
-    def can_move(self, piece, source, target, board):
+    # בודק אם הפרש יכול לזוז בצורת L ולקפוץ מעל כלים
+    def can_move(
+        self,
+        piece,
+        source,
+        target,
+        board,
+        active_moves=None,
+        move_start_time=None,
+        move_duration=None
+    ):
 
         row = abs(target.row - source.row)
         col = abs(target.col - source.col)

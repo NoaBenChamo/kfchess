@@ -4,6 +4,7 @@ from config.constants import PIECE_SPEED
 class MovementTime:
 
 
+    # מחשב את זמן התנועה לפי המרחק ומהירות הכלי
     @staticmethod
     def calculate(
         piece,

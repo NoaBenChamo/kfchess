@@ -20,6 +20,7 @@ class ScriptRunner:
 
         self._controller = controller
 
+    # מריץ את רשימת הפקודות באמצעות הקונטרולר
     def run(self, commands):
 
         for command in commands:

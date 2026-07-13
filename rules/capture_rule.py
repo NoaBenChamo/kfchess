@@ -1,6 +1,7 @@
 class CaptureRule:
 
 
+    # בודק אם כלי יכול לאכול את הכלי היעד לפי צבע
     @staticmethod
     def can_capture(source_piece, target_piece):
 

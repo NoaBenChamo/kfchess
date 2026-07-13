@@ -17,3 +17,10 @@ class WaitCommand(Command):
 
 class PrintCommand(Command):
     pass
+
+
+class JumpCommand:
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y

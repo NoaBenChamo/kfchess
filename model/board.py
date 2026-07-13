@@ -1,13 +1,16 @@
+#מייצג את הלוח של המשחק כרשימת רשימות של כלים
 class Board:
 
     def __init__(self, cells):
         self._cells = cells
 
 
+    # מחזיר את כל השורות של הלוח כרשימת רשימות
     def get_rows(self):
         return self._cells
 
 
+    # מחזיר את הכלי הנמצא במיקום הנתון
     def get(self, position):
 
         return self._cells[
@@ -17,6 +20,7 @@ class Board:
         ]
 
 
+    # מעדכן את התא במיקום הנתון לערך חדש
     def set(self, position, value):
 
         self._cells[
@@ -26,6 +30,7 @@ class Board:
         ] = value
 
 
+    # בודק אם המיקום נמצא בתחום הלוח
     def is_inside(self, position):
 
         return (
@@ -35,6 +40,7 @@ class Board:
         )
 
 
+    # מחזיר ייצוג טקסטואלי של הלוח כמחרוזת שורות
     def __str__(self):
 
         result = []

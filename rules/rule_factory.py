@@ -18,7 +18,7 @@ class RuleFactory:
     }
 
 
+    # מחזיר את אובייקט החוקים המתאים לכלי המבוקש
     @staticmethod
     def get(piece_type):
-
         return RuleFactory._rules[piece_type]

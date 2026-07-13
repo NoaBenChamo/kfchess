@@ -1,6 +1,7 @@
 class MovementValidator:
 
 
+    # בודק אם כלי במיקום נתון נמצא כרגע בתנועה
     @staticmethod
     def is_moving(
         active_moves,

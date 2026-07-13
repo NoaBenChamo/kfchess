@@ -1,6 +1,7 @@
 class BoardPrinter:
 
 
+    # מדפיס את הלוח לפלט טקסטואלי עם נקודה לתא ריווח בין כלים
     @staticmethod
     def print(board):
 

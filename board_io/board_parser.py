@@ -5,7 +5,7 @@ from config.constants import VALID_COLORS, VALID_PIECES
 
 class BoardParser:
 
-
+    # ממיר את שורות הקלט ובונה לוח משחק עם כלים לפי הטוקנים שבקלט
     @staticmethod
     def parse(lines):
 
@@ -20,12 +20,12 @@ class BoardParser:
 
             line = line.strip()
 
-
+            # זיהוי תחילת הגדרת הלוח
             if line == "Board:":
                 reading = True
                 continue
 
-
+            # עצירה כשמגיעים לפקודות
             if line == "Commands:":
                 break
 
@@ -34,6 +34,7 @@ class BoardParser:
 
                 tokens = line.split()
 
+                # בדיקת עקביות רוחב השורות
                 if width is None:
                     width = len(tokens)
                 elif len(tokens) != width:
@@ -41,6 +42,7 @@ class BoardParser:
 
                 row = []
 
+                # המרת כל טוקן לכלי או לתא ריק
                 for token in tokens:
 
                     if token == ".":

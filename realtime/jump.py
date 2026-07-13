@@ -16,6 +16,6 @@ class Jump:
         )
 
 
+    # בודק אם הקפיצה הסתיימה לפי השעון
     def is_finished(self, current_time):
-
         return current_time >= self.end_time
