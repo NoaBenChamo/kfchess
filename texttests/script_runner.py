@@ -1,10 +1,9 @@
 from input.commands import (
     ClickCommand,
     WaitCommand,
-    PrintCommand
+    PrintCommand,
+    JumpCommand
 )
-
-from input.jump_command import JumpCommand
 
 from board_io.board_printer import BoardPrinter
 
