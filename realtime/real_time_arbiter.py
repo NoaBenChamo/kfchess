@@ -6,7 +6,10 @@ from rules.game_over_rule import GameOverRule
 from rules.path_checker import PathChecker
 from rules.promotion_rule import PromotionRule
 
-
+# TODO:
+# לטפל במקרה שבו כלי מסיים תנועה בדיוק למשבצת שאליה נוחת כלי שנמצא באוויר (Jump).
+# יש להגדיר בצורה אחידה מה קורה לכלי הנכנס (אכילה/ביטול התנועה/ניקוי המקור)
+# תוך שמירה על מצב עקבי של הלוח ושל רשימת התנועות הפעילות.
 class RealTimeArbiter:
 
 
@@ -30,20 +33,15 @@ class RealTimeArbiter:
         self._active_jumps.append(jump)
 
 
-    # מקדם את השעון ומעבד את כל התנועות והקפיצות שהסתיימו
+    # מקדם זמן ומעבד אירועים שהסתיימו
     def wait(self, ms):
 
         self._clock.advance(ms)
-        # זיהוי ופתרון התנגשויות בין תנועות חוצות
-        CrossingDetector.detect_and_resolve(
-            self._active_moves,
-            self._board
-        )
 
-        # נחיתת תנועות שהסתיימו
+        # קודם מסיימים תנועות רגילות
         self.resolve_finished_moves()
 
-        # ניקוי קפיצות שהסתיימו
+        # אחר כך מחזירים קפיצות
         self.resolve_finished_jumps()
 
 
@@ -61,42 +59,24 @@ class RealTimeArbiter:
         )
 
 
-    # מעבד את כל התנועות שהסתיימו ומנחית אותן על הלוח
-    def resolve_finished_moves(self):
-
-        current_time = self._clock.get_time()
-
-        # איסוף כל התנועות שהגיעו ליעדן
-        finished = [
-            move for move in self._active_moves
-            if move.is_finished(current_time)
-        ]
-
-        self.resolve_arrivals(finished)
-
-        # הסרת התנועות השלמות מהרשימה הפעילה
-        for move in finished:
-            if move in self._active_moves:
-                self._active_moves.remove(move)
-
-
-
-    # מעבד את התנועות השלמות לפי סדר זמן הגעה
-    def resolve_arrivals(self, finished_moves):
-
-        # מיון לפי זמן הגעה ואחר כך לפי move_id במקרה שווה
-        sorted_moves = sorted(
-            finished_moves,
-            key=lambda m: (m.arrival_time, m.move_id)
-        )
-
-        for move in sorted_moves:
-            self.resolve_single_arrival(move)
-
-
-
-    # מנחית תנועה אחת על הלוח תוך טיפול בהתנגשויות עם כלים אחרים
+    # מנחית תנועה אחת על הלוח תוך טיפול בהתנגשויות
     def resolve_single_arrival(self, move):
+
+        # בדיקה האם יש כלי שנמצא בקפיצה באותה משבצת
+        airborne_jump = self._find_jump_at(move.target)
+
+        if airborne_jump is not None:
+
+            # כלי מאותו צבע חוסם את הנחיתה
+            if airborne_jump.piece.color == move.piece.color:
+                return
+
+            # כלי שנע מגיע לכלי שבאוויר:
+            # הכלי שבאוויר נשאר, והכלי הנכנס נלכד
+            airborne_jump.captured_piece = move.piece
+
+            return
+
 
         target_piece = self._board.get(move.target)
 
@@ -104,6 +84,7 @@ class RealTimeArbiter:
         if target_piece is None:
             self.finish_move_at(move, move.target)
             return
+
 
         # כלי ידיד ביעד — עצירה לפני התא החסום
         if target_piece.color == move.piece.color:
@@ -118,7 +99,9 @@ class RealTimeArbiter:
 
             if stop_cell is not None:
                 self.finish_move_at(move, stop_cell)
+
             return
+
 
         # כלי אויב ביעד — אכילה
         self.finish_move_at(move, move.target)
@@ -178,6 +161,17 @@ class RealTimeArbiter:
 
     # מנחית כלי קופץ בחזרה למקומו ומטפל בהתנגשויות
     def _land_jump(self, jump):
+
+        if jump.captured_piece is not None:
+
+            # הכלי שניסה להגיע נלכד,
+            # אבל הכלי שקפץ חוזר ללוח
+            self._board.set(
+                jump.position,
+                jump.piece
+            )
+
+            return  
 
         piece_on_square = self._board.get(jump.position)
 
@@ -254,3 +248,31 @@ class RealTimeArbiter:
             if move.target == position:
                 return move
         return None
+
+
+    def _find_jump_at(self, position):
+
+        for jump in self._active_jumps:
+            if jump.position == position:
+                return jump
+
+        return None
+    
+
+    # מסיים את כל התנועות שהגיעו ליעד
+    def resolve_finished_moves(self):
+
+        current_time = self._clock.get_time()
+
+        finished_moves = [
+            move
+            for move in self._active_moves
+            if move.is_finished(current_time)
+        ]
+
+        for move in finished_moves:
+
+            self.resolve_single_arrival(move)
+
+            if move in self._active_moves:
+                self._active_moves.remove(move)

@@ -133,20 +133,26 @@ class GameEngine:
     def jump(self, x, y):
 
         position = BoardMapper.to_position(x, y)
-        
-        # בדיקות תקינות לפני הרמה
+
+        # בדיקה שהמיקום נמצא בתוך הלוח
         if not self._board.is_inside(position):
             return
 
         piece = self._board.get(position)
 
+        # אין כלי להרים
         if piece is None:
             return
 
+        # אי אפשר לקפוץ עם כלי שנמצא בתנועה
+        if self._arbiter.is_piece_moving(position):
+            return
+
+        # לא ניתן לקפוץ עם כלי שנחת עכשיו מתנועה
         if self._arbiter.was_landed_via_move(position):
             return
 
-        # הסרת הכלי מהלוח ורישום הקפיצה
+        # הסרת הכלי מהלוח ויצירת קפיצה
         self._board.set(position, None)
 
         jump = Jump(
@@ -157,3 +163,4 @@ class GameEngine:
         )
 
         self._arbiter.add_jump(jump)
+        self.clear_selection()

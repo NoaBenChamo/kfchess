@@ -11,11 +11,18 @@ class Jump:
         self.position = position
         self.piece = piece
 
-        self.end_time = (
+        self.start_time = start_time
+        self.duration = duration
+
+        self.arrival_time = (
             start_time + duration
         )
 
+        # כלי אויב שנלכד בזמן הקפיצה
+        self.captured_piece = None
 
-    # בודק אם הקפיצה הסתיימה לפי השעון
+
+    # בודק אם הקפיצה הסתיימה
     def is_finished(self, current_time):
-        return current_time >= self.end_time
+
+        return current_time >= self.arrival_time

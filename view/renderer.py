@@ -1,13 +1,10 @@
 class Renderer:
+    """Draws the current game snapshot onto the display surface."""
 
+    def __init__(self, surface, image_view):
+        self._surface = surface
+        self._image_view = image_view
 
-    # מצייר את מצב המשחק הנוכחי על המסך
     def render(self, snapshot):
-
-        board = snapshot.get_board()
-
-        for row in board.get_rows():
-
-            print(
-                " ".join(row)
-            )
+        """Draw the full board state described by the given snapshot."""
+        pass
