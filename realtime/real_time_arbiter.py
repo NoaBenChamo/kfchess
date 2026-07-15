@@ -34,7 +34,7 @@ class RealTimeArbiter:
 
 
     # מקדם זמן ומעבד אירועים שהסתיימו
-    def wait(self, ms):
+    def tick(self, ms):
 
         self._clock.advance(ms)
 

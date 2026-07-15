@@ -6,6 +6,8 @@ from realtime.real_time_arbiter import RealTimeArbiter
 from rules.rule_engine import RuleEngine
 from config.constants import JUMP_DURATION
 from input.board_mapper import BoardMapper
+from view.game_snapshot import GameSnapshot
+from view.piece_snapshot import PieceSnapshot
 
 #מנהל את המשחק
 class GameEngine:
@@ -98,9 +100,9 @@ class GameEngine:
 
 
     # מקדם את השעון ב-ms ומעבד את האירועים שנוצרו באותה תקופה
-    def wait(self, ms):
+    def tick(self, ms):
 
-        self._arbiter.wait(ms)
+        self._arbiter.tick(ms)
         events = self._arbiter.get_events()
 
         # בדיקה אם אחד האירועים הוא סיום משחק
@@ -127,6 +129,31 @@ class GameEngine:
     # מסמן את המשחק כהסתיים מבחוץ
     def set_game_over(self):
         self._game_over = True
+
+
+    # בונה ומחזיר snapshot של מצב המשחק הנוכחי
+    def create_snapshot(self):
+
+        pieces = []
+        rows = self._board.get_rows()
+
+        for row_idx, row in enumerate(rows):
+            for col_idx, piece in enumerate(row):
+                if piece is not None:
+                    pieces.append(PieceSnapshot(
+                        piece.color,
+                        piece.type,
+                        Position(row_idx, col_idx),
+                        piece.state
+                    ))
+
+        return GameSnapshot(
+            board_width=len(rows[0]) if rows else 0,
+            board_height=len(rows),
+            pieces=pieces,
+            selected_cell=self._selected,
+            game_over=self._game_over
+        )
 
 
     # מרים כלי מהלוח זמנית ורושם קפיצה שתנחת אחרי JUMP_DURATION מילישניות

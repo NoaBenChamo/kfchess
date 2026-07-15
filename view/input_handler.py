@@ -1,9 +1,18 @@
+import cv2
+
+
 class InputHandler:
-    """Translates raw input events into controller calls."""
 
     def __init__(self, controller):
         self._controller = controller
 
     def handle(self, event):
-        """Process a single input event and forward it to the controller."""
-        pass
+        if event == ord('q'):
+            return False
+        return True
+
+    def handle_mouse(self, x, y, flags):
+        if flags == cv2.EVENT_LBUTTONDOWN:
+            self._controller.click(x, y)
+        elif flags == cv2.EVENT_RBUTTONDOWN:
+            self._controller.jump(x, y)

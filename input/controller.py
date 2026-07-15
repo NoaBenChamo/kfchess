@@ -76,9 +76,9 @@ class Controller:
 
 
     # מקדם את זמן המשחק במספר מילישניות נתון
-    def wait(self, ms):
+    def tick(self, ms):
 
-        self._game_engine.wait(ms)
+        self._game_engine.tick(ms)
 
 
 
