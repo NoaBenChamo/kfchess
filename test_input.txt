@@ -1,9 +1,0 @@
-Board:
-wR . . bR
-Commands:
-click 50 50
-click 350 50
-click 350 50
-click 50 50
-wait 3000
-print board
