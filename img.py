@@ -57,27 +57,33 @@ class Img:
         if self.img is None or other_img.img is None:
             raise ValueError("Both images must be loaded before drawing.")
 
-        if self.img.shape[2] != other_img.img.shape[2]:
-            if self.img.shape[2] == 3 and other_img.img.shape[2] == 4:
-                self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2BGRA)
-            elif self.img.shape[2] == 4 and other_img.img.shape[2] == 3:
-                self.img = cv2.cvtColor(self.img, cv2.COLOR_BGRA2BGR)
+        src = self.img
+        if src.shape[2] != other_img.img.shape[2]:
+            if src.shape[2] == 3 and other_img.img.shape[2] == 4:
+                src = cv2.cvtColor(src, cv2.COLOR_BGR2BGRA)
+            elif src.shape[2] == 4 and other_img.img.shape[2] == 3:
+                src = cv2.cvtColor(src, cv2.COLOR_BGRA2BGR)
 
-        h, w = self.img.shape[:2]
+        h, w = src.shape[:2]
         H, W = other_img.img.shape[:2]
 
-        if y + h > H or x + w > W:
-            raise ValueError("Logo does not fit at the specified position.")
+        x1, y1 = max(x, 0), max(y, 0)
+        x2, y2 = min(x + w, W), min(y + h, H)
+        sx1, sy1 = x1 - x, y1 - y
+        sx2, sy2 = sx1 + (x2 - x1), sy1 + (y2 - y1)
+        if x2 <= x1 or y2 <= y1:
+            return
 
-        roi = other_img.img[y:y + h, x:x + w]
+        roi = other_img.img[y1:y2, x1:x2]
+        sprite = src[sy1:sy2, sx1:sx2]
 
-        if self.img.shape[2] == 4:
-            b, g, r, a = cv2.split(self.img)
+        if sprite.shape[2] == 4:
+            b, g, r, a = cv2.split(sprite)
             mask = a / 255.0
             for c in range(3):
-                roi[..., c] = (1 - mask) * roi[..., c] + mask * self.img[..., c]
+                roi[..., c] = (1 - mask) * roi[..., c] + mask * sprite[..., c]
         else:
-            other_img.img[y:y + h, x:x + w] = self.img
+            other_img.img[y1:y2, x1:x2] = sprite
 
     def put_text(self, txt, x, y, font_size, color=(255, 255, 255, 255), thickness=1):
         if self.img is None:
@@ -86,9 +92,8 @@ class Img:
                     cv2.FONT_HERSHEY_SIMPLEX, font_size,
                     color, thickness, cv2.LINE_AA)
 
-    def show(self):
+    def show(self, window_name="KFChess"):
         if self.img is None:
             raise ValueError("Image not loaded.")
-        cv2.imshow("Image", self.img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        display = cv2.cvtColor(self.img, cv2.COLOR_BGRA2BGR) if self.img.shape[2] == 4 else self.img
+        cv2.imshow(window_name, display)

@@ -1,6 +1,5 @@
 import cv2
-
-
+#listen to the input from the users and convert it to a fit action
 class InputHandler:
 
     def __init__(self, controller):
@@ -11,8 +10,8 @@ class InputHandler:
             return False
         return True
 
-    def handle_mouse(self, x, y, flags):
-        if flags == cv2.EVENT_LBUTTONDOWN:
+    def handle_mouse(self, x, y, event):
+        if event == cv2.EVENT_LBUTTONDOWN:
             self._controller.click(x, y)
-        elif flags == cv2.EVENT_RBUTTONDOWN:
+        elif event == cv2.EVENT_RBUTTONDOWN:
             self._controller.jump(x, y)

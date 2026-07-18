@@ -1,520 +1,330 @@
-# \# KFChess
+# KFChess
+
+Python implementation of the Kung Fu Chess project.
+
+---
+
+# Project Structure
+
+```text
+kfchess/
+
+model/
+    position.py
+    piece.py
+    board.py
+    game_state.py
+
+rules/
+    piece_rules/
+        movement_rule.py
+        pawn_rule.py
+        knight_rule.py
+        bishop_rule.py
+        rook_rule.py
+        queen_rule.py
+        king_rule.py
+    rule_engine.py
+    rule_factory.py
+    capture_rule.py
+    game_over_rule.py
+    path_checker.py
+    promotion_rule.py
 
-# 
+realtime/
+    move.py
+    jump.py
+    clock.py
+    movement_time.py
+    movement_validator.py
+    crossing_detector.py
+    real_time_arbiter.py
+
+engine/
+    game_engine.py
 
-# Python implementation of the Kung Fu Chess project.
+input/
+    board_mapper.py
+    controller.py
+    commands.py
+    command_parser.py
 
-# 
+board_io/
+    board_parser.py
+    board_printer.py
+    board_validator.py
 
-# \---
+config/
+    constants.py
 
-# 
+view/
+    piece_state.py
+    piece_snapshot.py
+    game_snapshot.py
+    renderer.py
+    image_view.py
+    input_handler.py
+    game_runner.py
 
-# \# Project Structure
+texttests/
+    script_parser.py
+    script_runner.py
 
-# 
+tests/
+    unit/
+    integration/
 
-# ```text
+assets/
+    board.png
+    pieces/
 
-# kungfu\_chess/
+app.py       ← text-based entry point (script mode)
+main.py      ← graphical entry point (OpenCV window)
+```
 
-# 
+---
 
-# model/
+# Architecture
 
-# &#x20;   position.py
+The project follows a layered architecture.
 
-# &#x20;   piece.py
+Each layer has a single responsibility and communicates only through its public interface.
 
-# &#x20;   board.py
+The main design goals are:
 
-# &#x20;   game\_state.py
+* Single Responsibility Principle (SRP)
+* Separation of Concerns
+* Modular architecture
+* Low coupling
+* High cohesion
+* Easy unit testing
+* Easy future extension
 
-# 
+---
 
-# rules/
+# Layer Responsibilities
 
-# &#x20;   piece\_rules.py
+## Model
 
-# &#x20;   rule\_engine.py
+Responsible only for representing the logical game state.
 
-# 
+Contains:
 
-# realtime/
+* `Position` — a board cell identified by row and column
+* `Piece` — a chess piece with color, type, state (PieceState), and rest timer
+* `Board` — an 8×8 grid of pieces with get/set/is_inside operations
+* `GameState` — board + selected position + game_over flag (used in legacy flows)
 
-# &#x20;   motion.py
+The Model layer does **not** contain:
 
-# &#x20;   real\_time\_arbiter.py
+* movement rules
+* game logic
+* timing
+* rendering
+* input handling
+* script parsing
 
-# 
+---
 
-# engine/
+## Rules
 
-# &#x20;   game\_engine.py
+Responsible only for validating chess movement rules.
 
-# 
+Contains:
 
-# input/
+* `RuleEngine` — delegates move validation to the correct piece rule
+* `RuleFactory` — maps piece type (K/Q/R/B/N/P) to its rule object
+* `piece_rules/` — one rule class per piece type (MovementRule base, then PawnRule, KnightRule, BishopRule, RookRule, QueenRule, KingRule)
+* `PathChecker` — checks whether a path between two cells is clear (static and dynamic, accounting for active moves)
+* `CaptureRule` — determines whether one piece can capture another (color check)
+* `GameOverRule` — detects whether a captured piece is a king
+* `PromotionRule` — detects whether a pawn has reached the promotion row and promotes it to a queen
 
-# &#x20;   board\_mapper.py
+The Rules layer never modifies the board and has no knowledge of timing or rendering.
 
-# &#x20;   controller.py
+---
 
-# 
+## Realtime
 
-# io/
+Responsible only for real-time behavior.
 
-# &#x20;   board\_parser.py
+Contains:
 
-# &#x20;   board\_printer.py
+* `Move` — represents a piece travelling from source to target over a duration; provides pixel interpolation and path traversal
+* `Jump` — represents a piece lifted into the air for a fixed duration with a parabolic y-offset; can capture an enemy that arrives during the jump
+* `GameClock` — a simple millisecond counter advanced by `tick(ms)`
+* `MovementTime` — calculates move duration from distance and per-piece speed (configured in `constants.py`)
+* `MovementValidator` — checks whether a position is currently occupied by an active move
+* `CrossingDetector` — detects and resolves collisions between two friendly pieces moving toward the same cell; shortens or cancels the losing move
+* `RealTimeArbiter` — owns the clock, active moves, active jumps, and game events; resolves arrivals, captures, friendly blocking, jump landings, rest states, and pawn promotion
 
-# 
+The Realtime layer never validates chess movement rules.
 
-# view/
+---
 
-# &#x20;   renderer.py
+## Engine
 
-# &#x20;   image\_view.py
+Contains:
 
-# 
+* `GameEngine` — the central coordinator
 
-# texttests/
+Responsibilities:
 
-# &#x20;   script\_parser.py
+* receive `select`, `move_request`, `jump`, and `tick` calls
+* delegate move validation to `RuleEngine`
+* delegate time management and arrival resolution to `RealTimeArbiter`
+* build a `GameSnapshot` for the view on every frame
+* detect and propagate game-over
 
-# &#x20;   script\_runner.py
+GameEngine never contains piece-specific movement logic.
 
-# 
+---
 
-# app.py
+## Input
 
-# ```
+Contains:
 
-# 
+* `BoardMapper` — converts pixel coordinates to `Position` and back; cell dimensions are initialised from the loaded board image
+* `Controller` — translates click/jump/tick calls into `GameEngine` requests; handles selection, re-selection of a friendly piece, and move requests
+* `Command` / `ClickCommand` / `WaitCommand` / `PrintCommand` / `JumpCommand` — plain data objects representing script commands
+* `CommandParser` — parses a single text line into the appropriate Command object
 
-# \---
+The Input layer never modifies the board directly.
 
-# 
+---
 
-# \# Architecture
+## board_io
 
-# 
+Contains:
 
-# The project follows a layered architecture.
+* `BoardParser` — reads lines in `Board: … Commands:` format and builds a `Board` with `Piece` objects
+* `BoardPrinter` — prints a board to stdout in the same token format
+* `BoardValidator` — validates that every token in a cell list is a known piece or empty marker
 
-# 
+No game logic exists in this layer.
 
-# Each layer has a single responsibility and communicates only through its public interface.
+---
 
-# 
+## Config
 
-# The main design goals are:
+Contains:
 
-# 
+* `constants.py` — all shared constants: `VALID_COLORS`, `VALID_PIECES`, `PIECE_SPEED`, `PAWN_START_ROW`, `PAWN_PROMOTION_ROW`, `JUMP_DURATION`, `SHORT_REST_DURATION`, `LONG_REST_DURATION`
 
-# \* Single Responsibility Principle (SRP)
+---
 
-# \* Separation of Concerns
+## View
 
-# \* Modular architecture
+Contains:
 
-# \* Low coupling
+* `PieceState` — enum: `IDLE`, `MOVE`, `JUMP`, `SHORT_REST`, `LONG_REST`
+* `PieceSnapshot` — immutable data object describing one piece for the renderer (color, type, position, state, optional pixel coords, optional rest progress)
+* `GameSnapshot` — immutable data object describing the full frame (board dimensions, list of PieceSnapshots, selected cell, game_over flag)
+* `Renderer` — reads a `GameSnapshot` and calls `ImageView` draw methods; draws pieces, selection highlight, cooldown bars, and game-over text
+* `ImageView` — loads board and sprite assets from `assets/`; draws sprites, selection overlay, cooldown bar, and game-over text onto the board image using OpenCV
+* `InputHandler` — listens to keyboard (`q` to quit) and mouse events (left-click → Controller.click, right-click → Controller.jump)
+* `GameRunner` — owns the main loop: calls `engine.tick`, `engine.create_snapshot`, `renderer.render`, and `input_handler.handle` every 16 ms
 
-# \* High cohesion
+Rendering never modifies the game state.
 
-# \* Easy unit testing
+---
 
-# \* Easy future extension
+## Text Tests
 
-# 
+Contains:
 
-# \---
+* `ScriptParser` — reads lines after `Commands:` and returns a list of Command objects
+* `ScriptRunner` — executes a list of commands against a `Controller` (click, wait, print, jump)
 
-# 
+The script runner interacts with the game only through the public API.
 
-# \# Layer Responsibilities
+---
 
-# 
+## Tests
 
-# \## Model
+```text
+tests/
+    unit/
+        test_model.py
+        test_board_parser.py
+        test_board_printer.py
+        test_piece_rules.py
+        test_rule_engine.py
+        test_rules.py
+        test_realtime.py
+        test_real_time_arbiter.py
+        test_crossing_detector.py
+        test_move_path.py
+        test_path_checker_dynamic.py
+        test_find_last_free_cell.py
+        test_game_engine.py
+        test_controller.py
+    integration/
+        test_game_flow.py
+```
 
-# 
+---
 
-# Responsible only for representing the logical game state.
+# Entry Points
 
-# 
+| File | Description |
+|------|-------------|
+| `main.py` | Graphical mode — opens an OpenCV window and runs the real-time game loop |
+| `app.py` | Text/script mode — reads a board + command script from stdin and executes it |
 
-# Contains:
+---
 
-# 
+# Dependency Flow
 
-# \* Position
+```text
+Text Tests / UI
+        │
+        ▼
+    GameRunner
+        │
+        ▼
+    Controller
+        │
+        ▼
+   GameEngine
+    /       \
+   ▼         ▼
+RuleEngine  RealTimeArbiter
+     \      /
+      ▼    ▼
+       Model
+```
 
-# \* Piece
+Each layer may depend only on lower layers.
 
-# \* Board
+---
 
-# \* GameState
+# Design Rules
 
-# 
+* Every class has one responsibility.
+* Keep classes small and focused.
+* Avoid duplicated logic.
+* Prefer composition over unnecessary complexity.
+* Keep the architecture modular.
+* Do not bypass the GameEngine.
+* RuleEngine validates moves but never changes the board.
+* RealTimeArbiter manages time but never validates chess rules.
+* Controller translates input but never executes game logic.
+* Renderer only displays data.
+* Board represents data only and does not manage the game.
 
-# The Model layer does \*\*not\*\* contain:
+---
 
-# 
+# Testing Strategy
 
-# \* movement rules
+Unit tests verify each layer independently.
 
-# \* game logic
+Integration tests verify the complete game flow through the public API.
 
-# \* timing
+The architecture is designed so that every layer can be tested without depending on higher layers.
 
-# \* rendering
+---
 
-# \* input handling
+# Architecture Rule
 
-# \* script parsing
-
-# 
-
-# \---
-
-# 
-
-# \## Rules
-
-# 
-
-# Responsible only for validating chess movement rules.
-
-# 
-
-# Contains:
-
-# 
-
-# \* PieceRules
-
-# \* RuleEngine
-
-# 
-
-# Responsibilities:
-
-# 
-
-# \* validate requested moves
-
-# \* determine legal destinations
-
-# \* inspect the board state
-
-# 
-
-# The Rules layer never modifies the board and has no knowledge of timing or rendering.
-
-# 
-
-# \---
-
-# 
-
-# \## Realtime
-
-# 
-
-# Responsible only for real-time behavior.
-
-# 
-
-# Contains:
-
-# 
-
-# \* Motion
-
-# \* RealTimeArbiter
-
-# 
-
-# Responsibilities:
-
-# 
-
-# \* active motions
-
-# \* simulated time
-
-# \* motion completion
-
-# \* captures
-
-# \* collision handling
-
-# 
-
-# The Realtime layer never validates chess movement rules.
-
-# 
-
-# \---
-
-# 
-
-# \## Engine
-
-# 
-
-# Contains:
-
-# 
-
-# \* GameEngine
-
-# 
-
-# Responsibilities:
-
-# 
-
-# \* coordinate the game
-
-# \* receive game requests
-
-# \* delegate move validation
-
-# \* delegate time management
-
-# \* update the game state
-
-# \* detect game over
-
-# 
-
-# GameEngine should never contain piece-specific movement logic.
-
-# 
-
-# \---
-
-# 
-
-# \## Input
-
-# 
-
-# Contains:
-
-# 
-
-# \* BoardMapper
-
-# \* Controller
-
-# 
-
-# Responsibilities:
-
-# 
-
-# \* convert screen coordinates into board positions
-
-# \* translate user actions into game requests
-
-# 
-
-# The Input layer never modifies the board directly.
-
-# 
-
-# \---
-
-# 
-
-# \## IO
-
-# 
-
-# Contains:
-
-# 
-
-# \* BoardParser
-
-# \* BoardPrinter
-
-# 
-
-# Responsibilities:
-
-# 
-
-# \* parse textual board definitions
-
-# \* print the logical board
-
-# 
-
-# No game logic should exist in this layer.
-
-# 
-
-# \---
-
-# 
-
-# \## View
-
-# 
-
-# Contains:
-
-# 
-
-# \* Renderer
-
-# \* ImageView
-
-# 
-
-# Responsible only for drawing the current game state.
-
-# 
-
-# Rendering must never modify the game state.
-
-# 
-
-# \---
-
-# 
-
-# \## Text Tests
-
-# 
-
-# Contains:
-
-# 
-
-# \* ScriptParser
-
-# \* ScriptRunner
-
-# 
-
-# Responsible for executing text-based integration scripts.
-
-# 
-
-# The script runner must interact with the game only through the public API.
-
-# 
-
-# \---
-
-# 
-
-# \# Dependency Flow
-
-# 
-
-# ```text
-
-# Text Tests / UI
-
-# &#x20;       │
-
-# &#x20;       ▼
-
-# &#x20;    Controller
-
-# &#x20;       │
-
-# &#x20;       ▼
-
-# &#x20;   GameEngine
-
-# &#x20;    /       \\
-
-# &#x20;   ▼         ▼
-
-# RuleEngine  RealTimeArbiter
-
-# &#x20;     \\      /
-
-# &#x20;      ▼    ▼
-
-# &#x20;       Model
-
-# ```
-
-# 
-
-# Each layer may depend only on lower layers.
-
-# 
-
-# \---
-
-# 
-
-# \# Design Rules
-
-# 
-
-# \* Every class has one responsibility.
-
-# \* Keep classes small and focused.
-
-# \* Avoid duplicated logic.
-
-# \* Prefer composition over unnecessary complexity.
-
-# \* Keep the architecture modular.
-
-# \* Do not bypass the GameEngine.
-
-# \* RuleEngine validates moves but never changes the board.
-
-# \* RealTimeArbiter manages time but never validates chess rules.
-
-# \* Controller translates input but never executes game logic.
-
-# \* Renderer only displays data.
-
-# \* Board represents data only and does not manage the game.
-
-# 
-
-# \---
-
-# 
-
-# \# Testing Strategy
-
-# 
-
-# Unit tests verify each layer independently.
-
-# 
-
-# Integration tests verify the complete game flow through the public API.
-
-# 
-
-# The architecture is designed so that every layer can be tested without depending on higher layers.
-
-# 
-
-# \---
-
-# 
-
-# \# Architecture Rule
-
-# 
-
-# \*\*Before adding a new feature, first determine which layer owns the responsibility. If a class starts accumulating unrelated responsibilities, refactor it instead of extending it.\*\*
-
-
-
+**Before adding a new feature, first determine which layer owns the responsibility. If a class starts accumulating unrelated responsibilities, refactor it instead of extending it.**

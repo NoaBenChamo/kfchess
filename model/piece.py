@@ -7,6 +7,7 @@ class Piece:
         self.color = color
         self.type = piece_type
         self.state = PieceState.IDLE
+        self.rest_until = 0
 
 
     # מחזיר ייצוג טקסטואלי של הכלי בפורמט צבע+סוג

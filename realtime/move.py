@@ -64,6 +64,19 @@ class Move:
         return path
 
 
+    # מחזיר את המיקום הרציף (x, y בפיקסלים) של הכלי בזמן נתון
+    def pixel_position_at(self, time, cell_width, cell_height):
+        t = max(0.0, min(1.0, (time - self.start_time) / self.duration))
+        src_x = self.source.col * cell_width
+        src_y = self.source.row * cell_height
+        dst_x = self.target.col * cell_width
+        dst_y = self.target.row * cell_height
+        return (
+            int(src_x + (dst_x - src_x) * t),
+            int(src_y + (dst_y - src_y) * t)
+        )
+
+
     # מחזיר את התא הדיסקרטי שהכלי נמצא בו בזמן נתון
     def position_at(self, time):
 

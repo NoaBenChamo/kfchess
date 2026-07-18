@@ -5,6 +5,8 @@ from rules.capture_rule import CaptureRule
 from rules.game_over_rule import GameOverRule
 from rules.path_checker import PathChecker
 from rules.promotion_rule import PromotionRule
+from view.piece_state import PieceState
+from config.constants import SHORT_REST_DURATION, LONG_REST_DURATION
 
 # TODO:
 # לטפל במקרה שבו כלי מסיים תנועה בדיוק למשבצת שאליה נוחת כלי שנמצא באוויר (Jump).
@@ -25,11 +27,13 @@ class RealTimeArbiter:
 
     # מוסיף תנועה פעילה לרשימת התנועות
     def add_move(self, move):
+        move.piece.state = PieceState.MOVE
         self._active_moves.append(move)
 
 
     # מוסיף קפיצה פעילה לרשימת הקפיצות
     def add_jump(self, jump):
+        jump.piece.state = PieceState.JUMP
         self._active_jumps.append(jump)
 
 
@@ -43,6 +47,9 @@ class RealTimeArbiter:
 
         # אחר כך מחזירים קפיצות
         self.resolve_finished_jumps()
+
+        # מחזיר כלים שסיימו מנוחה ל-IDLE
+        self._resolve_resting_pieces()
 
 
     # מחזיר את הזמן הנוכחי של השעון
@@ -74,6 +81,18 @@ class RealTimeArbiter:
             # כלי שנע מגיע לכלי שבאוויר:
             # הכלי שבאוויר נשאר, והכלי הנכנס נלכד
             airborne_jump.captured_piece = move.piece
+
+            # ניקוי תא המקור של הכלי הנכנס
+            other_uses_source = any(
+                m for m in self._active_moves
+                if m is not move and m.source == move.source
+            )
+            if not other_uses_source:
+                self._board.set(move.source, None)
+
+            # בדיקה אם נלכד מלך
+            if GameOverRule.is_king_captured(move.piece):
+                self._game_events.append("GAME_OVER")
 
             return
 
@@ -130,6 +149,11 @@ class RealTimeArbiter:
         # נחיתת הכלי במיקום היעד
         self._board.set(position, move.piece)
 
+        # עדכון state למנוחה ארוכה
+        current_time = self._clock.get_time()
+        move.piece.state = PieceState.LONG_REST
+        move.piece.rest_until = current_time + LONG_REST_DURATION
+
         # רישום נחיתה לצורך טיפול בקפיצות
         self._landed_via_move[position] = move.source
 
@@ -170,7 +194,7 @@ class RealTimeArbiter:
                 jump.position,
                 jump.piece
             )
-
+            self._set_short_rest(jump.piece)
             return  
 
         piece_on_square = self._board.get(jump.position)
@@ -178,6 +202,7 @@ class RealTimeArbiter:
         # תא ריק — נחיתה רגילה
         if piece_on_square is None:
             self._board.set(jump.position, jump.piece)
+            self._set_short_rest(jump.piece)
             return
 
         # כלי ידיד הגיע בזמן הקפיצה — דוחפים אותו אחור
@@ -200,10 +225,12 @@ class RealTimeArbiter:
             # פינוי התא ונחיתת הקופץ
             self._board.set(jump.position, None)
             self._board.set(jump.position, jump.piece)
+            self._set_short_rest(jump.piece)
             return
 
         # כלי אויב בתא — אכילה
         self._board.set(jump.position, jump.piece)
+        self._set_short_rest(jump.piece)
 
         if GameOverRule.is_king_captured(piece_on_square):
             self._game_events.append("GAME_OVER")
@@ -232,6 +259,11 @@ class RealTimeArbiter:
         return list(self._active_moves)
 
 
+    # מחזיר עותק של רשימת הקפיצות הפעילות
+    def get_active_jumps(self):
+        return list(self._active_jumps)
+
+
     # בודק אם כלי נחת במיקום זה בעקבות תנועה
     def was_landed_via_move(self, position):
         return position in self._landed_via_move
@@ -257,6 +289,22 @@ class RealTimeArbiter:
                 return jump
 
         return None
+
+
+    # מעביר כלי למנוחה קצרה
+    def _set_short_rest(self, piece):
+        piece.state = PieceState.SHORT_REST
+        piece.rest_until = self._clock.get_time() + SHORT_REST_DURATION
+
+
+    # מחזיר כלים שפג זמן המנוחה שלהם ל-IDLE
+    def _resolve_resting_pieces(self):
+        current_time = self._clock.get_time()
+        for row in self._board.get_rows():
+            for piece in row:
+                if piece is not None and piece.state in (PieceState.SHORT_REST, PieceState.LONG_REST):
+                    if current_time >= piece.rest_until:
+                        piece.state = PieceState.IDLE
     
 
     # מסיים את כל התנועות שהגיעו ליעד

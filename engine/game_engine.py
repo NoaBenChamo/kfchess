@@ -4,10 +4,11 @@ from realtime.move import Move
 from realtime.movement_time import MovementTime
 from realtime.real_time_arbiter import RealTimeArbiter
 from rules.rule_engine import RuleEngine
-from config.constants import JUMP_DURATION
+from config.constants import JUMP_DURATION, SHORT_REST_DURATION, LONG_REST_DURATION
 from input.board_mapper import BoardMapper
 from view.game_snapshot import GameSnapshot
 from view.piece_snapshot import PieceSnapshot
+from view.piece_state import PieceState
 
 #מנהל את המשחק
 class GameEngine:
@@ -135,17 +136,57 @@ class GameEngine:
     def create_snapshot(self):
 
         pieces = []
+        current_time = self._arbiter.get_time()
+        active_moves = self._arbiter.get_active_moves()
+        active_jumps = self._arbiter.get_active_jumps()
+        moving_sources = {m.source for m in active_moves}
+        jumping_positions = {j.position for j in active_jumps}
+
+        cell_w = BoardMapper.CELL_WIDTH
+        cell_h = BoardMapper.CELL_HEIGHT
         rows = self._board.get_rows()
 
         for row_idx, row in enumerate(rows):
             for col_idx, piece in enumerate(row):
                 if piece is not None:
-                    pieces.append(PieceSnapshot(
-                        piece.color,
-                        piece.type,
-                        Position(row_idx, col_idx),
-                        piece.state
-                    ))
+                    pos = Position(row_idx, col_idx)
+                    if pos not in moving_sources:
+                        rest_progress = None
+                        if piece.state == PieceState.SHORT_REST:
+                            rest_progress = 1.0 - (piece.rest_until - current_time) / SHORT_REST_DURATION
+                        elif piece.state == PieceState.LONG_REST:
+                            rest_progress = 1.0 - (piece.rest_until - current_time) / LONG_REST_DURATION
+                        rest_progress = max(0.0, min(1.0, rest_progress)) if rest_progress is not None else None
+                        pieces.append(PieceSnapshot(
+                            piece.color,
+                            piece.type,
+                            pos,
+                            piece.state,
+                            rest_progress=rest_progress
+                        ))
+
+        for move in active_moves:
+            px, py = move.pixel_position_at(current_time, cell_w, cell_h)
+            pieces.append(PieceSnapshot(
+                move.piece.color,
+                move.piece.type,
+                move.source,
+                PieceState.MOVE,
+                pixel_x=px,
+                pixel_y=py
+            ))
+
+        for jump in active_jumps:
+            px, py = BoardMapper.to_pixels(jump.position)
+            py += jump.y_offset_at(current_time)
+            pieces.append(PieceSnapshot(
+                jump.piece.color,
+                jump.piece.type,
+                jump.position,
+                PieceState.JUMP,
+                pixel_x=px,
+                pixel_y=py
+            ))
 
         return GameSnapshot(
             board_width=len(rows[0]) if rows else 0,

@@ -1,10 +1,12 @@
 import cv2
 from view.input_handler import InputHandler
 
+#TODO:
+#move this consts to config/constans file
 TICK_MS = 16
 WINDOW_NAME = "KFChess"
 
-
+#מנהל את מהלך המשחק
 class GameRunner:
 
     def __init__(self, engine, controller, renderer):
