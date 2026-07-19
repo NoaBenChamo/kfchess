@@ -37,8 +37,10 @@ class GameEngine:
         if piece is None:
             return
 
-        # אין בחירה של כלי בתנועה
         if self._arbiter.is_piece_moving(position):
+            return
+
+        if piece.state in (PieceState.SHORT_REST, PieceState.LONG_REST):
             return
 
         self._selected = position
@@ -142,8 +144,8 @@ class GameEngine:
         moving_sources = {m.source for m in active_moves}
         jumping_positions = {j.position for j in active_jumps}
 
-        cell_w = BoardMapper.CELL_WIDTH
-        cell_h = BoardMapper.CELL_HEIGHT
+        cell_w = BoardMapper.cell_width()
+        cell_h = BoardMapper.cell_height()
         rows = self._board.get_rows()
 
         for row_idx, row in enumerate(rows):

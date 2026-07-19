@@ -13,6 +13,9 @@ class Controller:
 
         position = BoardMapper.to_position(x, y)
 
+        if position is None:
+            return
+
         if self._game_engine.get_selected() is None:
             self._select_piece(position)
 
@@ -91,5 +94,10 @@ class Controller:
 
     # שולח בקשת קפיצה למנוע המשחק
     def jump(self, x, y):
+
+        position = BoardMapper.to_position(x, y)
+
+        if position is None:
+            return
 
         self._game_engine.jump(x, y)

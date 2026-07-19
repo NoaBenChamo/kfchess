@@ -62,9 +62,14 @@ view/
     piece_snapshot.py
     game_snapshot.py
     renderer.py
-    image_view.py
     input_handler.py
     game_runner.py
+    game_view/
+        game_view.py
+        game_layout.py
+        board_view.py
+        player_view.py
+        header_view.py
 
 texttests/
     script_parser.py
@@ -220,10 +225,27 @@ Contains:
 * `PieceState` — enum: `IDLE`, `MOVE`, `JUMP`, `SHORT_REST`, `LONG_REST`
 * `PieceSnapshot` — immutable data object describing one piece for the renderer (color, type, position, state, optional pixel coords, optional rest progress)
 * `GameSnapshot` — immutable data object describing the full frame (board dimensions, list of PieceSnapshots, selected cell, game_over flag)
-* `Renderer` — reads a `GameSnapshot` and calls `ImageView` draw methods; draws pieces, selection highlight, cooldown bars, and game-over text
-* `ImageView` — loads board and sprite assets from `assets/`; draws sprites, selection overlay, cooldown bar, and game-over text onto the board image using OpenCV
+* `Renderer` — receives a `GameSnapshot`, delegates entirely to `GameView.render` and `GameView.present`
 * `InputHandler` — listens to keyboard (`q` to quit) and mouse events (left-click → Controller.click, right-click → Controller.jump)
 * `GameRunner` — owns the main loop: calls `engine.tick`, `engine.create_snapshot`, `renderer.render`, and `input_handler.handle` every 16 ms
+
+### game_view/
+
+The `game_view` sub-package coordinates the complete screen layout:
+
+```
+┌────────────────────────────────────────────┐
+│                  HEADER                    │
+├──────────────┬──────────────┬──────────────┤
+│ LEFT PLAYER  │    BOARD     │ RIGHT PLAYER │
+└──────────────┴──────────────┴──────────────┘
+```
+
+* `GameLayout` — calculates the pixel geometry (position and size) of every screen region (header, left panel, board, right panel) from the board dimensions
+* `GameView` — owns the full-screen canvas; coordinates `HeaderView`, left `PlayerView`, `BoardView`, and right `PlayerView`; composites all sub-views into the canvas each frame
+* `BoardView` — all board rendering: loads `board.png` and piece sprites, draws pieces with frame animations, movement/jump pixel interpolation, selection highlight, cooldown/rest progress bars, coordinate labels (A–H / 1–8), and game-over text
+* `HeaderView` — top area; currently renders a plain dark bar; reserved for future game title or status information
+* `PlayerView` — side panel for one player; currently renders a plain dark bar; reserved for future player name, captured pieces, and move history — **player data and move history are not yet implemented**
 
 Rendering never modifies the game state.
 
@@ -293,6 +315,21 @@ RuleEngine  RealTimeArbiter
      \      /
       ▼    ▼
        Model
+```
+
+Within the View layer:
+
+```text
+GameRunner
+    │
+    ▼
+ Renderer
+    │
+    ▼
+ GameView
+  /  |  \
+ ▼   ▼   ▼
+HeaderView  PlayerView(×2)  BoardView
 ```
 
 Each layer may depend only on lower layers.
