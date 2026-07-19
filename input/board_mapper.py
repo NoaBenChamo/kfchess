@@ -2,19 +2,22 @@ from model.position import Position
 
 
 class BoardMapper:
+    """
+    Converts between full-window pixel coordinates
+    and logical board positions.
+    """
 
     def __init__(self, board_rect):
         self._board_rect = board_rect
 
     def to_position(self, x, y):
         """
-        Converts window pixel coordinates
-        to a board Position.
+        Converts full-window pixel coordinates into a board Position.
 
-        Returns None when the coordinates
-        are outside the playable board.
+        Returns:
+            Position when the coordinates are inside the playable board.
+            None when the coordinates are outside the board.
         """
-
         if not self._board_rect.contains(x, y):
             return None
 
@@ -25,16 +28,15 @@ class BoardMapper:
         row = local_y // self._board_rect.cell_height
 
         return Position(
-            row,
-            col,
+            row=row,
+            col=col,
         )
 
     def to_pixels(self, position):
         """
-        Converts a board Position to the top-left
-        global window pixel coordinates of the cell.
+        Converts a board Position into the top-left full-window
+        pixel coordinates of its cell.
         """
-
         x = (
             self._board_rect.x
             + position.col * self._board_rect.cell_width

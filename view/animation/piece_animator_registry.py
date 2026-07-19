@@ -1,0 +1,1 @@
+"""Piece animator registry placeholder."""

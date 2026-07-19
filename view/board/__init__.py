@@ -1,0 +1,1 @@
+"""Board view package."""

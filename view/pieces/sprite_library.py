@@ -1,0 +1,1 @@
+"""Sprite library placeholder."""

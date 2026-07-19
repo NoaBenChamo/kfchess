@@ -1,9 +1,10 @@
 from board_io.board_parser import BoardParser
 from engine.game_engine import GameEngine
 from input.controller import Controller
+from view.game_runner import GameRunner, get_work_area
 from view.game_view.game_view import GameView
 from view.rendering.renderer import Renderer
-from view.game_runner import GameRunner, get_work_area
+
 
 INITIAL_BOARD = """
 Board:
@@ -17,14 +18,45 @@ wP wP wP wP wP wP wP wP
 wR wN wB wQ wK wB wN wR
 """
 
-def main():
-    board = BoardParser.parse(INITIAL_BOARD.strip().splitlines())
+
+def create_game():
+    """
+    Creates and connects all game components.
+
+    Returns:
+        GameRunner: Fully configured game runner.
+    """
+    board = BoardParser.parse(
+        INITIAL_BOARD.strip().splitlines()
+    )
+
     engine = GameEngine(board)
-    window_w, window_h = get_work_area()
-    game_view = GameView(window_w, window_h)
-    controller = Controller(engine, game_view.board_mapper)
+
+    work_area_width, work_area_height = get_work_area()
+
+    game_view = GameView(
+        work_area_width,
+        work_area_height,
+    )
+
+    controller = Controller(
+        game_engine=engine,
+        board_mapper=game_view.board_mapper,
+    )
+
     renderer = Renderer(game_view)
-    GameRunner(engine, controller, renderer).run()
+
+    return GameRunner(
+        engine=engine,
+        controller=controller,
+        renderer=renderer,
+    )
+
+
+def main():
+    game_runner = create_game()
+    game_runner.run()
+
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,1 @@
+"""Assets manager placeholder."""

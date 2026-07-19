@@ -1,19 +1,17 @@
 class BoardRect:
     """
-    Describes a rectangular area of the game board inside the full window.
+    Describes the playable board area inside the full game window.
 
-    The coordinates are expressed in full-window pixel coordinates.
-
-    Attributes:
-        x: Top-left x coordinate.
-        y: Top-left y coordinate.
-        width: Width of the board area in pixels.
-        height: Height of the board area in pixels.
-        cols: Number of board columns.
-        rows: Number of board rows.
+    All coordinates are expressed in full-window pixels.
     """
 
     def __init__(self, x, y, width, height, cols, rows):
+        if cols <= 0 or rows <= 0:
+            raise ValueError("Board rows and columns must be positive")
+
+        if width <= 0 or height <= 0:
+            raise ValueError("Board width and height must be positive")
+
         self._x = x
         self._y = y
         self._width = width
@@ -56,21 +54,26 @@ class BoardRect:
     def cell_height(self):
         return self._cell_height
 
-    # Aliases used by tests
     @property
     def cell_w(self):
+        """Backward-compatible alias."""
         return self._cell_width
 
     @property
     def cell_h(self):
+        """Backward-compatible alias."""
         return self._cell_height
 
+    @property
+    def right(self):
+        return self._x + self._width
+
+    @property
+    def bottom(self):
+        return self._y + self._height
+
     def contains(self, x, y):
-        """
-        Returns True if the given window coordinates
-        are inside the playable board area.
-        """
         return (
-            self._x <= x < self._x + self._width
-            and self._y <= y < self._y + self._height
+            self._x <= x < self.right
+            and self._y <= y < self.bottom
         )

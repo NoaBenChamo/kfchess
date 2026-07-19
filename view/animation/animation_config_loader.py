@@ -1,0 +1,1 @@
+"""Animation configuration loader placeholder."""
