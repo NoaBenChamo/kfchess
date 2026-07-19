@@ -1,72 +1,57 @@
 from model.position import Position
-from input.board_rect import BoardRect
-
-BOARD_COLS = 8
-BOARD_ROWS = 8
 
 
 class BoardMapper:
-    """
-    Converts between canvas pixel coordinates and board Position objects.
 
-    All conversions are driven by a single BoardRect that is set once at
-    startup (or whenever the layout changes).  No offsets are hardcoded
-    anywhere else.
-    """
+    def __init__(self, board_rect):
+        self._board_rect = board_rect
 
-    _rect: BoardRect = BoardRect(0, 0, 800, 800, BOARD_COLS, BOARD_ROWS)
-
-    @classmethod
-    def init(cls, rect: BoardRect):
-        cls._rect = rect
-
-    # ------------------------------------------------------------------ #
-    # Canvas → board                                                        #
-    # ------------------------------------------------------------------ #
-
-    @classmethod
-    def to_position(cls, canvas_x, canvas_y):
+    def to_position(self, x, y):
         """
-        Convert canvas pixel coordinates to a board Position.
-        Returns None if the point is outside the board area.
+        Converts window pixel coordinates
+        to a board Position.
+
+        Returns None when the coordinates
+        are outside the playable board.
         """
-        if not cls._rect.contains(canvas_x, canvas_y):
+
+        if not self._board_rect.contains(x, y):
             return None
 
-        local_x = canvas_x - cls._rect.x
-        local_y = canvas_y - cls._rect.y
+        local_x = x - self._board_rect.x
+        local_y = y - self._board_rect.y
+
+        col = local_x // self._board_rect.cell_width
+        row = local_y // self._board_rect.cell_height
 
         return Position(
-            local_y // cls._rect.cell_h,
-            local_x // cls._rect.cell_w,
+            row,
+            col,
         )
 
-    # ------------------------------------------------------------------ #
-    # Board → canvas                                                        #
-    # ------------------------------------------------------------------ #
+    def to_pixels(self, position):
+        """
+        Converts a board Position to the top-left
+        global window pixel coordinates of the cell.
+        """
 
-    @classmethod
-    def to_pixels(cls, position):
-        """
-        Convert a board Position to canvas pixel coordinates (top-left of cell).
-        """
-        return (
-            cls._rect.x + position.col * cls._rect.cell_w,
-            cls._rect.y + position.row * cls._rect.cell_h,
+        x = (
+            self._board_rect.x
+            + position.col * self._board_rect.cell_width
         )
 
-    # ------------------------------------------------------------------ #
-    # Convenience accessors used by BoardView                              #
-    # ------------------------------------------------------------------ #
+        y = (
+            self._board_rect.y
+            + position.row * self._board_rect.cell_height
+        )
 
-    @classmethod
-    def cell_width(cls):
-        return cls._rect.cell_w
+        return x, y
 
-    @classmethod
-    def cell_height(cls):
-        return cls._rect.cell_h
+    def cell_width(self):
+        return self._board_rect.cell_width
 
-    @classmethod
-    def get_rect(cls):
-        return cls._rect
+    def cell_height(self):
+        return self._board_rect.cell_height
+
+    def get_rect(self):
+        return self._board_rect

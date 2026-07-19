@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class PieceState(Enum):
     IDLE = "idle"
     MOVE = "move"

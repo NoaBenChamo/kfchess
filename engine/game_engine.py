@@ -5,10 +5,10 @@ from realtime.movement_time import MovementTime
 from realtime.real_time_arbiter import RealTimeArbiter
 from rules.rule_engine import RuleEngine
 from config.constants import JUMP_DURATION, SHORT_REST_DURATION, LONG_REST_DURATION
-from input.board_mapper import BoardMapper
-from view.game_snapshot import GameSnapshot
-from view.piece_snapshot import PieceSnapshot
-from view.piece_state import PieceState
+from application.snapshots.game_snapshot import GameSnapshot
+from application.snapshots.piece_snapshot import PieceSnapshot
+from application.snapshots.move_record import MoveRecord
+from model.piece_state import PieceState
 
 #מנהל את המשחק
 class GameEngine:
@@ -21,6 +21,8 @@ class GameEngine:
         self._arbiter = RealTimeArbiter(board)
         self._selected = None
         self._game_over = False
+        self._white_moves = []
+        self._black_moves = []
 
 
     # בוחר כלי על הלוח רק במקרה שהבחירה חוקית
@@ -98,6 +100,16 @@ class GameEngine:
             duration
         )
 
+        # זיהוי סוג המהלך לצורך תצוגה
+        target_piece = self._board.get(target)
+        move_type = "capture" if target_piece is not None else "move"
+
+        record = MoveRecord(piece.color, piece.type, source, target, move_type)
+        if piece.color == "w":
+            self._white_moves.append(record)
+        else:
+            self._black_moves.append(record)
+
         self._arbiter.add_move(move)
         self._selected = None
 
@@ -144,8 +156,6 @@ class GameEngine:
         moving_sources = {m.source for m in active_moves}
         jumping_positions = {j.position for j in active_jumps}
 
-        cell_w = BoardMapper.cell_width()
-        cell_h = BoardMapper.cell_height()
         rows = self._board.get_rows()
 
         for row_idx, row in enumerate(rows):
@@ -168,26 +178,22 @@ class GameEngine:
                         ))
 
         for move in active_moves:
-            px, py = move.pixel_position_at(current_time, cell_w, cell_h)
             pieces.append(PieceSnapshot(
                 move.piece.color,
                 move.piece.type,
                 move.source,
                 PieceState.MOVE,
-                pixel_x=px,
-                pixel_y=py
+                target=move.target,
+                progress=move.progress_at(current_time),
             ))
 
         for jump in active_jumps:
-            px, py = BoardMapper.to_pixels(jump.position)
-            py += jump.y_offset_at(current_time)
             pieces.append(PieceSnapshot(
                 jump.piece.color,
                 jump.piece.type,
                 jump.position,
                 PieceState.JUMP,
-                pixel_x=px,
-                pixel_y=py
+                progress=jump.progress_at(current_time),
             ))
 
         return GameSnapshot(
@@ -195,17 +201,17 @@ class GameEngine:
             board_height=len(rows),
             pieces=pieces,
             selected_cell=self._selected,
-            game_over=self._game_over
+            game_over=self._game_over,
+            white_moves=list(self._white_moves),
+            black_moves=list(self._black_moves),
         )
 
 
     # מרים כלי מהלוח זמנית ורושם קפיצה שתנחת אחרי JUMP_DURATION מילישניות
-    def jump(self, x, y):
+    def jump(self, position):
 
-        position = BoardMapper.to_position(x, y)
-
-        # בדיקה שהמיקום נמצא בתוך הלוח
-        if not self._board.is_inside(position):
+        # The controller already converted screen coordinates to a Position.
+        if position is None or not self._board.is_inside(position):
             return
 
         piece = self._board.get(position)
@@ -231,6 +237,13 @@ class GameEngine:
             self._arbiter.get_time(),
             JUMP_DURATION
         )
+
+        # רישום הקפיצה להיסטוריה
+        jump_record = MoveRecord(piece.color, piece.type, position, position, "jump")
+        if piece.color == "w":
+            self._white_moves.append(jump_record)
+        else:
+            self._black_moves.append(jump_record)
 
         self._arbiter.add_jump(jump)
         self.clear_selection()

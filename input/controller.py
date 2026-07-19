@@ -1,17 +1,15 @@
-from input.board_mapper import BoardMapper
-
-
 class Controller:
 
-    def __init__(self, game_engine):
+    def __init__(self, game_engine, board_mapper):
 
         self._game_engine = game_engine
+        self._board_mapper = board_mapper
 
 
     # מעבד לחיצה על הלוח
     def click(self, x, y):
 
-        position = BoardMapper.to_position(x, y)
+        position = self._board_mapper.to_position(x, y)
 
         if position is None:
             return
@@ -85,6 +83,11 @@ class Controller:
 
 
 
+    def wait(self, ms):
+        self._game_engine.tick(ms)
+
+
+
     # מחזיר את מצב הלוח הנוכחי
     def get_board(self):
 
@@ -95,9 +98,9 @@ class Controller:
     # שולח בקשת קפיצה למנוע המשחק
     def jump(self, x, y):
 
-        position = BoardMapper.to_position(x, y)
+        position = self._board_mapper.to_position(x, y)
 
         if position is None:
             return
 
-        self._game_engine.jump(x, y)
+        self._game_engine.jump(position)

@@ -5,7 +5,7 @@ from rules.capture_rule import CaptureRule
 from rules.game_over_rule import GameOverRule
 from rules.path_checker import PathChecker
 from rules.promotion_rule import PromotionRule
-from view.piece_state import PieceState
+from model.piece_state import PieceState
 from config.constants import SHORT_REST_DURATION, LONG_REST_DURATION
 
 # TODO:
@@ -157,13 +157,14 @@ class RealTimeArbiter:
         # רישום נחיתה לצורך טיפול בקפיצות
         self._landed_via_move[position] = move.source
 
+        # Capturing a king ends the game before any pawn-promotion logic.
+        if GameOverRule.is_king_captured(target_piece):
+            self._game_events.append("GAME_OVER")
+            return
+
         # בדיקת קידום רגלי
         if PromotionRule.should_promote(move.piece, position, self._board):
             move.piece.type = "Q"
-
-        # בדיקה אם נלכד מלך
-        if GameOverRule.is_king_captured(target_piece):
-            self._game_events.append("GAME_OVER")
 
 
     # מעבד קפיצות שהסתיימו ומחזיר את הכלי ללוח

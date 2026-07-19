@@ -1,12 +1,12 @@
 import cv2
-from config.constants import HEADER_BG_COLOR
+from config.constants import FOOTER_BG_COLOR
 
 
-class HeaderView:
+class FooterView:
     """
-    Top area of the screen.
+    Bottom area of the screen.
     Currently renders a plain dark bar.
-    Reserved for future game title or status information.
+    Reserved for future status information.
     """
 
     def render(self, canvas, rect):
@@ -14,6 +14,6 @@ class HeaderView:
             canvas,
             (rect.x, rect.y),
             (rect.x + rect.width, rect.y + rect.height),
-            HEADER_BG_COLOR,
+            FOOTER_BG_COLOR,
             thickness=-1,
         )

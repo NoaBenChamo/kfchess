@@ -1,4 +1,4 @@
-from view.piece_state import PieceState
+from model.piece_state import PieceState
 
 #מייצג כלי שחמט עם צבע וסוג
 class Piece:

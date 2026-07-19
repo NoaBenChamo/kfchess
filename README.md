@@ -189,7 +189,7 @@ GameEngine never contains piece-specific movement logic.
 
 Contains:
 
-* `BoardMapper` — converts pixel coordinates to `Position` and back; cell dimensions are initialised from the loaded board image
+* `BoardMapper` — an injected, per-window mapper that converts pixel coordinates to `Position` and back using `BoardRect`
 * `Controller` — translates click/jump/tick calls into `GameEngine` requests; handles selection, re-selection of a friendly piece, and move requests
 * `Command` / `ClickCommand` / `WaitCommand` / `PrintCommand` / `JumpCommand` — plain data objects representing script commands
 * `CommandParser` — parses a single text line into the appropriate Command object
@@ -243,7 +243,8 @@ The `game_view` sub-package coordinates the complete screen layout:
 
 * `GameLayout` — calculates the pixel geometry (position and size) of every screen region (header, left panel, board, right panel) from the board dimensions
 * `GameView` — owns the full-screen canvas; coordinates `HeaderView`, left `PlayerView`, `BoardView`, and right `PlayerView`; composites all sub-views into the canvas each frame
-* `BoardView` — all board rendering: loads `board.png` and piece sprites, draws pieces with frame animations, movement/jump pixel interpolation, selection highlight, cooldown/rest progress bars, coordinate labels (A–H / 1–8), and game-over text
+* `AssetsManager` — loads and caches the board image and resized piece-sprite frames
+* `BoardView` — all board rendering: draws the managed assets, performs pixel interpolation for semantic move/jump progress, selection highlight, cooldown/rest progress bars, coordinate labels (A–H / 1–8), and game-over text
 * `HeaderView` — top area; currently renders a plain dark bar; reserved for future game title or status information
 * `PlayerView` — side panel for one player; currently renders a plain dark bar; reserved for future player name, captured pieces, and move history — **player data and move history are not yet implemented**
 

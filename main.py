@@ -2,8 +2,8 @@ from board_io.board_parser import BoardParser
 from engine.game_engine import GameEngine
 from input.controller import Controller
 from view.game_view.game_view import GameView
-from view.renderer import Renderer
-from view.game_runner import GameRunner
+from view.rendering.renderer import Renderer
+from view.game_runner import GameRunner, get_work_area
 
 INITIAL_BOARD = """
 Board:
@@ -20,8 +20,9 @@ wR wN wB wQ wK wB wN wR
 def main():
     board = BoardParser.parse(INITIAL_BOARD.strip().splitlines())
     engine = GameEngine(board)
-    controller = Controller(engine)
-    game_view = GameView()
+    window_w, window_h = get_work_area()
+    game_view = GameView(window_w, window_h)
+    controller = Controller(engine, game_view.board_mapper)
     renderer = Renderer(game_view)
     GameRunner(engine, controller, renderer).run()
 
