@@ -4,9 +4,7 @@ from config.constants import LABEL_MARGIN
 class BoardGeometry:
     """
     Converts board positions into local board-canvas pixel coordinates.
-
     This class contains view geometry only.
-    It does not read input and does not change game state.
     """
 
     def __init__(self, board_rect):

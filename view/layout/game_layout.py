@@ -26,10 +26,8 @@ class GameLayout:
 
     def __init__(self, window_width, window_height):
         self._validate_window_size(window_width, window_height)
-
         self._total_width = window_width
         self._total_height = window_height
-
         self._create_layout()
 
     def _create_layout(self):
@@ -88,13 +86,7 @@ class GameLayout:
             board_canvas_height,
         )
 
-    def _create_board_rect(
-        self,
-        canvas_x,
-        canvas_y,
-        canvas_width,
-        canvas_height,
-    ):
+    def _create_board_rect(self,canvas_x,canvas_y,canvas_width,canvas_height,):
         available_width = canvas_width - LABEL_MARGIN
         available_height = canvas_height - LABEL_MARGIN
 

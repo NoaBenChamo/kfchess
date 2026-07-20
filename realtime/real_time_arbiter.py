@@ -51,6 +51,9 @@ class RealTimeArbiter:
         # מחזיר כלים שסיימו מנוחה ל-IDLE
         self._resolve_resting_pieces()
 
+    def wait(self, ms):
+        """Backward-compatible alias for tick()."""
+        self.tick(ms)
 
     # מחזיר את הזמן הנוכחי של השעון
     def get_time(self):

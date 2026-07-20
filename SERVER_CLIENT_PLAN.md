@@ -186,15 +186,15 @@ Match / Broadcaster translates
 Network message
 ```
 
-לדוגמה:
+לדוגמה (אחרי שלב A):
 
 ```text
-MoveResolvedEvent
+GameOverEvent
       ↓
-{"type": "game_event", "kind": "move_resolved", ...}
+{"type": "game_over", "winner": "w", ...}
 ```
 
-כך ה־Engine אינו תלוי בפורמט התקשורת.
+כך ה־Engine אינו תלוי בפורמט התקשורת. אירועי תנועה מפורטים יתווספו רק אם יידרשו בשלבים מאוחרים יותר.
 
 ### 5.5 פרוטוקול ברור ומרוכז
 
@@ -376,7 +376,7 @@ client/  → RuleEngine
 - הוספת `winner` / `get_winner()` אם אינו קיים.
 - הוספת `move_from_to(src, dst)` לנתיב רשת (סעיף 5.7).
 - הוספת `resign(color)` רק כאשר מגיעים לשלב הניתוקים.
-- הוספת `EventBus` + `GameOverEvent` (ואירועי lifecycle נוספים) בשלב A.
+- הוספת `EventBus` + `GameStartedEvent` / `GameOverEvent` בשלב A (בלי אירועי תנועה).
 
 ### לא עושים
 
@@ -398,48 +398,120 @@ client/  → RuleEngine
 
 ### מטרה
 
-לאפשר למספר רכיבים להגיב לאירועי משחק בלי שה־GameEngine יכיר אותם.
+לאפשר למספר רכיבים להגיב לאירועי משחק בלי שה־`GameEngine` יכיר אותם.
 
-### אירועים נדרשים
+### למה EventBus? (Snapshot מול Bus)
 
-- `GameStartedEvent`
-- `MotionStartedEvent`
-- `JumpStartedEvent`
-- `MoveResolvedEvent` / `ArrivalEvent`
-- `GameOverEvent`
+המשחק המקומי כבר עובד כך:
 
-אין חובה שכל האירועים יפורסמו מאותה שכבה:
+```text
+GameRunner → engine.tick(ms) → engine.create_snapshot() → Renderer / HUD
+```
 
-- אירועי משחק פנימיים — מתוך ה־Engine.
-- התחלת Match רשת — מתוך `Match` או שירות השרת.
+- **Snapshot** (`create_snapshot()`) נשאר מנגנון הרינדור: מצב מלא בכל פריים (כלים, ניקוד, לוג מהלכים, `game_over`).
+- **EventBus** נוסף להתראות חד־פעמיות: התחלת משחק, סיום משחק, ובהמשך (בשרת) שידור ללקוחות.
+- שני המנגנונים **משלימים זה את זה**, לא מחליפים זה את זה.
+- בעתיד, `Broadcaster` של `Match` יהיה subscriber נוסף לאותו bus — בלי שהליבה תכיר WebSocket.
 
-### צרכנים
+בלי bus, הוספת צליל/אנימציית סיום תדרוש מה־Engine לקרוא ישירות ל־View — אסור, ושובר את הפרדת השכבות לשרת.
 
-- Score.
-- Moves Log.
-- Sound Player.
-- Start animation.
-- Game-over animation.
+### API קיים שנשען עליו (שמות אמיתיים מהריפו)
 
-### API מינימלי
+| רכיב | שם אמיתי |
+|---|---|
+| קידום זמן | `GameEngine.tick(ms)` |
+| מצב לתצוגה | `GameEngine.create_snapshot()` |
+| מהלך (UI שני קליקים) | `select` + `move_request(target)` |
+| קפיצה | `jump(position)` |
+| סיום מה־arbiter | מחרוזת `"GAME_OVER"` מ־`get_events()` |
+| פתיחת לוח | `board_io.BoardParser` |
+| Snapshot DTOs | חבילת `snapshots/` (וגם עותק תחת `application/snapshots/` — Stage A לא מזיז תיקיות) |
+| לולאת משחק מקומית | `main.py` → `GameRunner` |
+
+### אילו אירועים בשלב A
+
+רק שניים:
+
+- `GameStartedEvent` — מ־`start_game()` על ה־Engine (במקומי; ברשת ייקרא גם מ־`Match` בהמשך).
+- `GameOverEvent` — כש־`tick` מעבד `"GAME_OVER"` מה־arbiter (או `set_game_over`).
+
+אירועי תנועה (`MotionStartedEvent`, `JumpStartedEvent`, `MoveResolvedEvent` וכו') **אינם חלק משלב A**.
+
+### צרכנים בשלב A
+
+- `SoundPlayer` — צליל על התחלה/סיום.
+- `GameOverTracker` — דגל/מנצח להנפשת סיום.
+
+ניקוד ולוג מהלכים נשארים דרך Snapshot / HUD הקיים — **ללא שכתוב**.
+
+### API מינימלי של ה־Bus
 
 ```python
 subscribe(event_type, handler)
 publish(event)
-unsubscribe(event_type, handler)  # רק אם נדרש לניקוי Match
+unsubscribe(event_type, handler)  # לניקוי Match בעתיד
 ```
 
-### בדיקות
+### תת-שלבים (A.1 → A.4)
+
+#### A.1 — EventBus גנרי בלבד
+
+- קבצים: `bus/event_bus.py`, `tests/unit/test_event_bus.py`
+- `subscribe` / `unsubscribe` / `publish`
+- טסטי יחידה עצמאיים
+- **אין שינוי ב־`GameEngine`**
+
+#### A.2 — חיבור מינימלי ל־GameEngine
+
+- `bus/events.py` — רק `GameStartedEvent`, `GameOverEvent`
+- `GameEngine` מחזיק `EventBus`
+- `start_game()` מפרסם `GameStartedEvent`
+- ב־`tick(ms)`, כשמגיע `"GAME_OVER"` → מפרסם `GameOverEvent` (פעם אחת)
+- אינטגרציה קטנה ככל האפשר; בלי אירועי תנועה; בלי שינוי `realtime/` מעבר לנדרש לזיהוי סיום הקיים
+
+#### A.3 — שני subscribers + חיבור מקומי
+
+- `view/audio/sound_player.py`
+- `view/hud/game_over_tracker.py`
+- חיבור ב־`main.py` / `create_game()`: `subscribe` + `start_game()`
+- HUD מבוסס Snapshot נשאר ללא שינוי
+
+#### A.4 — טסטים ואימות
+
+- טסטי bus (A.1)
+- `GameOverEvent` מתפרסם פעם אחת בסיום אמיתי
+- שני subscribers מקבלים את אותו אירוע
+- `pytest tests/` ירוק; `python main.py` עובד כרגיל
+- **עצירה לאישור לפני שלב B**
+
+### Out of Scope (שלב A)
+
+שלב A **אינו** כולל:
+
+- WebSocket / רשת
+- login / סיסמאות
+- matchmaking
+- rooms / צופים
+- protocol / serialization
+- שרת (`server/`) או לקוח רשת (`client/`)
+- refactor של תנועה / `move_from_to` (זה לסעיף 5.7 / שלב B+)
+- שכתוב HUD / Score / Moves Log ל־bus
+
+### Future Work (אחרי A, רק אם יידרש)
+
+אירועי תנועה (`MotionStartedEvent`, `JumpStartedEvent`, `MoveResolvedEvent` וכו') יתווספו **רק אם** שלב B או שלב מאוחר יותר יצטרך אותם בפועל (למשל אנימציה/סאונד מדויקים או שידור אירוע רשת). לא מוסיפים אותם מראש.
+
+### בדיקות (סיכום)
 
 - Subscriber מתאים מקבל אירוע פעם אחת.
 - Subscriber מסוג אחר אינו מקבל אותו.
 - מספר Subscribers מקבלים אותו אירוע.
-- GameEngine ממשיך לעבוד גם כשאין Subscribers.
-- שגיאה ב־Subscriber אחד אינה שוברת את מצב המשחק, בהתאם להחלטה מתועדת.
+- `GameEngine` ממשיך לעבוד גם בלי Subscribers.
+- שגיאה ב־Subscriber אחד אינה שוברת את מצב המשחק.
 
 ### תנאי סיום
 
-אירוע Game Over מעדכן בפועל לפחות שני רכיבים נפרדים בלי קריאה ישירה מה־Engine אליהם.
+`GameOverEvent` מעדכן בפועל לפחות שני רכיבים נפרדים (`SoundPlayer`, `GameOverTracker`) בלי קריאה ישירה מה־Engine אליהם; Snapshot/HUD עדיין עובדים; אין רשת בשלב זה.
 
 ---
 
@@ -1288,7 +1360,7 @@ async with match.lock:
 
 ```text
 0. Core readiness
-A. EventBus and game lifecycle events
+A. EventBus + GameStartedEvent / GameOverEvent (no movement events yet)
 B1. WebSocket ping/pong
 B2. One client + one server-side Match
 B3. Server tick loop
@@ -1327,8 +1399,8 @@ F2. Logging and final stabilization
 
 | שאלה | ממצא |
 |---|---|
-| API ציבורי של `GameEngine` | `select`, `clear_selection`, `get_selected`, `move_request(target)`, `jump(position)`, `tick(ms)`, `create_snapshot()`, `get_board()`, `is_game_over()`, `set_game_over()`. יתווספו: `move_from_to`, `start_game`, `get_winner`, EventBus publish/subscribe, ובהמשך `resign`. |
-| `GameSnapshot` | ב־[`snapshots/`](snapshots/) — headless, ניתן לייבוא בשרת בלי View. |
+| API ציבורי של `GameEngine` | `select`, `clear_selection`, `get_selected`, `move_request(target)`, `jump(position)`, `tick(ms)`, `create_snapshot()`, `get_board()`, `is_game_over()`, `set_game_over()`. בשלב A יתווספו: EventBus, `start_game()`, `GameStartedEvent` / `GameOverEvent`. בהמשך (לא A): `move_from_to`, `resign`, ואולי `get_winner`. |
+| `GameSnapshot` | חבילת `snapshots/` (headless). כיום ה־Engine מייבא גם מ־`application.snapshots` — כפילות קיימת; Stage A לא מזיז תיקיות. |
 | אירועים קיימים | אין EventBus. ה־arbiter צובר מחרוזות `"GAME_OVER"` ב־`get_events()`. |
 | מי מקדם זמן | `GameRunner` קורא ל־`engine.tick(TICK_MS)` בכל פריים; `Controller.wait` הוא alias ל־`tick`. |
 | פתיחת לוח | `BoardParser.parse` ב־`main.create_game()` / `board_io/`. |

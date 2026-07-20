@@ -7,8 +7,8 @@ def test_parse_simple_board():
 
     lines = [
         "Board:",
-        "WR .",
-        ". BK",
+        "wR .",
+        ". bK",
         "Commands:"
     ]
 
@@ -18,11 +18,11 @@ def test_parse_simple_board():
     black_king = board.get(Position(1, 1))
 
     assert isinstance(white_rook, Piece)
-    assert white_rook.color == "W"
+    assert white_rook.color == "w"
     assert white_rook.type == "R"
 
     assert isinstance(black_king, Piece)
-    assert black_king.color == "B"
+    assert black_king.color == "b"
     assert black_king.type == "K"
 
 
@@ -30,8 +30,8 @@ def test_parse_board_size():
 
     lines = [
         "Board:",
-        "WR . .",
-        ". BK .",
+        "wR . .",
+        ". bK .",
         "Commands:"
     ]
 
@@ -47,9 +47,9 @@ def test_parse_stops_at_commands():
 
     lines = [
         "Board:",
-        "WR .",
+        "wR .",
         "Commands:",
-        "WR WR"
+        "wR wR"
     ]
 
     board = BoardParser.parse(lines)
@@ -62,7 +62,7 @@ def test_empty_lines_are_ignored():
     lines = [
         "Board:",
         "",
-        "WR .",
+        "wR .",
         "",
         "Commands:"
     ]

@@ -5,16 +5,17 @@ from realtime.movement_time import MovementTime
 from realtime.real_time_arbiter import RealTimeArbiter
 from rules.rule_engine import RuleEngine
 from config.constants import JUMP_DURATION, SHORT_REST_DURATION, LONG_REST_DURATION
-from application.snapshots.game_snapshot import GameSnapshot
-from application.snapshots.piece_snapshot import PieceSnapshot
-from application.snapshots.move_record import MoveRecord
+from snapshots.game_snapshot import GameSnapshot
+from snapshots.piece_snapshot import PieceSnapshot
+from snapshots.move_record import MoveRecord
 from model.piece_state import PieceState
+from bus.event_bus import EventBus
+from bus.events import GameStartedEvent, GameOverEvent
 
-#מנהל את המשחק
 class GameEngine:
 
 
-    def __init__(self, board):
+    def __init__(self, board, event_bus=None):
 
         self._board = board
         self._rule_engine = RuleEngine()
@@ -23,9 +24,19 @@ class GameEngine:
         self._game_over = False
         self._white_moves = []
         self._black_moves = []
+        self._bus = event_bus if event_bus is not None else EventBus()
+
+    @property
+    def bus(self):
+        return self._bus
+
+    def subscribe(self, event_type, handler):
+        self._bus.subscribe(event_type, handler)
+
+    def start_game(self):
+        self._bus.publish(GameStartedEvent())
 
 
-    # בוחר כלי על הלוח רק במקרה שהבחירה חוקית
     def select(self, position):
 
         if self._game_over:
@@ -48,37 +59,30 @@ class GameEngine:
         self._selected = position
 
 
-    # מנקה את הבחירה הנוכחית 
     def clear_selection(self):
         self._selected = None
 
 
-    # מקבל בקשת הזזה, מאמת את החוקיות ומוסיף תנועה פעילה אם התנועה חוקית
     def move_request(self, target):
 
-        # אין בקשה בלי בחירה
         if self._selected is None:
             return
 
         source = self._selected
         piece = self._board.get(source)
 
-        # הכלי כבר נעלם מהלוח
         if piece is None:
             self._selected = None
             return
 
-        # הכלי כבר בתנועה
         if self._arbiter.is_piece_moving(source):
             self._selected = None
             return
 
-        # חישוב זמן התנועה
         duration = MovementTime.calculate(piece, source, target)
         current_time = self._arbiter.get_time()
         active_moves = self._arbiter.get_active_moves()
 
-        # אימות חוקייות ההזזה
         if not self._rule_engine.is_valid_move(
             piece,
             source,
@@ -91,7 +95,6 @@ class GameEngine:
             self._selected = None
             return
 
-        # יצירת התנועה והוספתה לרשימת התנועות הפעילות
         move = Move(
             piece,
             source,
@@ -100,7 +103,6 @@ class GameEngine:
             duration
         )
 
-        # זיהוי סוג המהלך לצורך תצוגה
         target_piece = self._board.get(target)
         move_type = "capture" if target_piece is not None else "move"
 
@@ -121,39 +123,43 @@ class GameEngine:
         self._selected = None
 
 
-    # מקדם את השעון ב-ms ומעבד את האירועים שנוצרו באותה תקופה
     def tick(self, ms):
 
         self._arbiter.tick(ms)
         events = self._arbiter.get_events()
 
-        # בדיקה אם אחד האירועים הוא סיום משחק
         for event in events:
             if event == "GAME_OVER":
-                self._game_over = True
+                self._apply_game_over()
 
+    def wait(self, ms):
+        """Backward-compatible alias for tick()."""
+        self.tick(ms)
 
-    # מחזיר את הלוח הנוכחי
     def get_board(self):
         return self._board
 
 
-    # מחזיר אם המשחק הסתיים
     def is_game_over(self):
         return self._game_over
 
 
-    # מחזיר את המיקום הנבחר כרגע
     def get_selected(self):
         return self._selected
 
 
-    # מסמן את המשחק כהסתיים מבחוץ
     def set_game_over(self):
+        self._apply_game_over()
+
+    def _apply_game_over(self):
+        if self._game_over:
+            return
         self._game_over = True
+        self._bus.publish(GameOverEvent(
+            timestamp_ms=self._arbiter.get_time(),
+        ))
 
 
-    # בונה ומחזיר snapshot של מצב המשחק הנוכחי
     def create_snapshot(self):
 
         pieces = []
@@ -223,24 +229,19 @@ class GameEngine:
         )
 
 
-    # מרים כלי מהלוח זמנית ורושם קפיצה שתנחת אחרי JUMP_DURATION מילישניות
     def jump(self, position):
 
-        # The controller already converted screen coordinates to a Position.
         if position is None or not self._board.is_inside(position):
             return
 
         piece = self._board.get(position)
 
-        # אין כלי להרים
         if piece is None:
             return
 
-        # אי אפשר לקפוץ עם כלי שנמצא בתנועה
         if self._arbiter.is_piece_moving(position):
             return
 
-        # הסרת הכלי מהלוח ויצירת קפיצה
         self._board.set(position, None)
 
         jump = Jump(
@@ -250,7 +251,6 @@ class GameEngine:
             JUMP_DURATION
         )
 
-        # רישום הקפיצה להיסטוריה
         jump_record = MoveRecord(
             piece.color,
             piece.type,

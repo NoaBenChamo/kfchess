@@ -3,6 +3,7 @@ from model.piece import Piece
 from model.position import Position
 
 from engine.game_engine import GameEngine
+from bus.events import GameStartedEvent, GameOverEvent
 from realtime.move import Move
 
 
@@ -155,3 +156,50 @@ def test_pawn_still_promotes_after_a_regular_move_to_the_last_rank():
 
     assert not engine.is_game_over()
     assert pawn.type == "Q"
+
+
+def test_start_game_publishes_game_started_event():
+    engine = GameEngine(Board([[None]]))
+    received = []
+
+    engine.subscribe(GameStartedEvent, received.append)
+    engine.start_game()
+
+    assert len(received) == 1
+    assert isinstance(received[0], GameStartedEvent)
+
+
+def test_game_over_publishes_event_once_when_king_is_captured():
+    pawn = Piece("w", "P")
+    board = Board([
+        [Piece("b", "K")],
+        [pawn],
+    ])
+    engine = GameEngine(board)
+    received = []
+    engine.subscribe(GameOverEvent, received.append)
+
+    engine._arbiter.add_move(Move(
+        pawn,
+        Position(1, 0),
+        Position(0, 0),
+        start_time=0,
+        duration=100,
+    ))
+    engine.tick(100)
+    engine.tick(100)
+
+    assert engine.is_game_over()
+    assert len(received) == 1
+    assert isinstance(received[0], GameOverEvent)
+
+
+def test_set_game_over_publishes_event_once():
+    engine = GameEngine(Board([[None]]))
+    received = []
+    engine.subscribe(GameOverEvent, received.append)
+
+    engine.set_game_over()
+    engine.set_game_over()
+
+    assert len(received) == 1

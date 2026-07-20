@@ -118,13 +118,13 @@ def test_white_pawn_forward():
 
     board = Board([
         [None],
-        [Piece("W", "P")]
+        [Piece("w", "P")]
     ])
 
     rule = PawnRule()
 
     assert rule.can_move(
-        Piece("W", "P"),
+        Piece("w", "P"),
         Position(1, 0),
         Position(0, 0),
         board

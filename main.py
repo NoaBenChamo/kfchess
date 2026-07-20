@@ -1,8 +1,11 @@
 from board_io.board_parser import BoardParser
+from bus.events import GameStartedEvent, GameOverEvent
 from engine.game_engine import GameEngine
 from input.controller import Controller
+from view.audio.sound_player import SoundPlayer
 from view.factory import create_ui
 from view.game_runner import GameRunner, get_work_area
+from view.hud.game_over_tracker import GameOverTracker
 
 
 INITIAL_BOARD = """
@@ -30,6 +33,13 @@ def create_game():
     )
 
     engine = GameEngine(board)
+
+    sound_player = SoundPlayer()
+    game_over_tracker = GameOverTracker()
+    engine.subscribe(GameStartedEvent, sound_player.on_game_started)
+    engine.subscribe(GameOverEvent, sound_player.on_game_over)
+    engine.subscribe(GameOverEvent, game_over_tracker.on_game_over)
+    engine.start_game()
 
     window_width, window_height = get_work_area()
     ui = create_ui(window_width, window_height)
