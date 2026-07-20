@@ -76,6 +76,17 @@ class RealTimeArbiter:
 
             # כלי מאותו צבע חוסם את הנחיתה
             if airborne_jump.piece.color == move.piece.color:
+                stop_cell = PathChecker.find_last_free_cell(
+                    move.source,
+                    move.target,
+                    self._board,
+                    self._active_moves,
+                    move.arrival_time
+                )
+
+                if stop_cell is not None:
+                    self.finish_move_at(move, stop_cell)
+
                 return
 
             # כלי שנע מגיע לכלי שבאוויר:
@@ -321,7 +332,22 @@ class RealTimeArbiter:
 
         for move in finished_moves:
 
+            self._resolve_jumps_before(move.arrival_time)
             self.resolve_single_arrival(move)
 
             if move in self._active_moves:
                 self._active_moves.remove(move)
+
+
+    # מנחית קפיצות שהסתיימו לפני הגעת תנועה, כדי שלא יטופלו כאילו עדיין באוויר
+    def _resolve_jumps_before(self, arrival_time):
+
+        finished_jumps = [
+            jump
+            for jump in self._active_jumps
+            if jump.arrival_time < arrival_time
+        ]
+
+        for jump in finished_jumps:
+            self._land_jump(jump)
+            self._active_jumps.remove(jump)
