@@ -240,10 +240,6 @@ class GameEngine:
         if self._arbiter.is_piece_moving(position):
             return
 
-        # לא ניתן לקפוץ עם כלי שנחת עכשיו מתנועה
-        if self._arbiter.was_landed_via_move(position):
-            return
-
         # הסרת הכלי מהלוח ויצירת קפיצה
         self._board.set(position, None)
 
