@@ -1,6 +1,6 @@
 from model.position import Position
 
-from application.snapshots.move_record import MoveRecord
+from snapshots.move_record import MoveRecord
 from view.hud.player_view import format_move_notation, format_move_time
 
 
