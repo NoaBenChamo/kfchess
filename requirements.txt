@@ -1,0 +1,6 @@
+opencv-python
+numpy
+websockets>=12.0
+pytest
+pytest-asyncio
+pytest-cov

@@ -1,0 +1,81 @@
+from client.snapshot_codec import snapshot_dict_to_game_snapshot
+
+
+class ClientState:
+    """
+    Holds the latest authoritative snapshot from the server plus local UI selection.
+    """
+
+    def __init__(self):
+        self._snapshot_dict = None
+        self.selected = None
+        self.sequence = -1
+        self.last_error = None
+
+    @property
+    def ready(self):
+        return self._snapshot_dict is not None
+
+    @property
+    def game_over(self):
+        if self._snapshot_dict is None:
+            return False
+        return bool(self._snapshot_dict.get("game_over"))
+
+    def handle_message(self, message):
+        message_type = message.get("type")
+        payload = message.get("payload") or {}
+
+        if message_type == "state_snapshot":
+            self._apply_snapshot(payload)
+            return
+
+        if message_type == "move_accepted":
+            snapshot = payload.get("snapshot")
+            if snapshot is not None:
+                self._apply_snapshot(snapshot)
+            self.selected = None
+            self.last_error = None
+            return
+
+        if message_type == "error":
+            self.last_error = payload
+            self.selected = None
+
+    def _apply_snapshot(self, payload):
+        sequence = payload.get("sequence", 0)
+        if self._snapshot_dict is not None and sequence < self.sequence:
+            return
+        self.sequence = sequence
+        self._snapshot_dict = payload
+
+    def clear_selection(self):
+        self.selected = None
+
+    def select(self, position):
+        self.selected = position
+
+    def create_snapshot(self):
+        if self._snapshot_dict is None:
+            return snapshot_dict_to_game_snapshot(
+                {
+                    "board_width": 8,
+                    "board_height": 8,
+                    "pieces": [],
+                    "game_over": False,
+                    "white_moves": [],
+                    "black_moves": [],
+                    "white_score": 0,
+                    "black_score": 0,
+                    "sequence": 0,
+                },
+                selected_cell=self.selected,
+            )
+        return snapshot_dict_to_game_snapshot(
+            self._snapshot_dict,
+            selected_cell=self.selected,
+        )
+
+    @property
+    def snapshot_dict(self):
+        return self._snapshot_dict

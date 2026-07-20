@@ -62,22 +62,28 @@ class GameEngine:
     def clear_selection(self):
         self._selected = None
 
+    def move_from_to(self, source, target):
+        """Atomic board move for network / scripted clients."""
+        self.select(source)
+        if self._selected != source:
+            return False
+        return self.move_request(target)
 
     def move_request(self, target):
 
         if self._selected is None:
-            return
+            return False
 
         source = self._selected
         piece = self._board.get(source)
 
         if piece is None:
             self._selected = None
-            return
+            return False
 
         if self._arbiter.is_piece_moving(source):
             self._selected = None
-            return
+            return False
 
         duration = MovementTime.calculate(piece, source, target)
         current_time = self._arbiter.get_time()
@@ -93,7 +99,7 @@ class GameEngine:
             duration
         ):
             self._selected = None
-            return
+            return False
 
         move = Move(
             piece,
@@ -114,13 +120,14 @@ class GameEngine:
             move_type,
             time_ms=self._arbiter.get_time(),
         )
-        if piece.color == "w":
+        if piece.color.lower() == "w":
             self._white_moves.append(record)
         else:
             self._black_moves.append(record)
 
         self._arbiter.add_move(move)
         self._selected = None
+        return True
 
 
     def tick(self, ms):
