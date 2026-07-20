@@ -10,8 +10,6 @@ class HighlightRenderer:
 
     def __init__(self, board_geometry):
         self._geometry = board_geometry
-        self._cell_width = board_geometry.cell_width
-        self._cell_height = board_geometry.cell_height
 
     def render(self, canvas, selected_cell):
         """
@@ -23,7 +21,11 @@ class HighlightRenderer:
         x, y = self._geometry.position_to_local(selected_cell)
 
         overlay = np.zeros(
-            (self._cell_height, self._cell_width, 4),
+            (
+                self._geometry.cell_height,
+                self._geometry.cell_width,
+                4,
+            ),
             dtype=np.uint8,
         )
 

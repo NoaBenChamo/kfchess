@@ -18,9 +18,6 @@ class PieceRenderer:
         self._geometry = board_geometry
         self._piece_animator = piece_animator
 
-        self._cell_width = board_geometry.cell_width
-        self._cell_height = board_geometry.cell_height
-
     def render(self, canvas, pieces, animation_time_ms):
         """
         Draw all pieces.
@@ -68,7 +65,7 @@ class PieceRenderer:
         """
         jump_height = max(
             1,
-            int(self._cell_height * 0.4),
+            int(self._geometry.cell_height * 0.4),
         )
 
         return int(

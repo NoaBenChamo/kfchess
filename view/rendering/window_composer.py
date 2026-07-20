@@ -27,11 +27,3 @@ class WindowComposer:
             ),
             dtype=np.uint8,
         )
-
-    @property
-    def width(self):
-        return self._width
-
-    @property
-    def height(self):
-        return self._height

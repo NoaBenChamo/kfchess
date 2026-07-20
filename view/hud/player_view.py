@@ -4,7 +4,6 @@ from config.constants import (
     PLAYER_BG_COLOR,
     PLAYER_TITLE_COLOR,
     PLAYER_MOVE_COLOR,
-    PLAYER_DIVIDER_COLOR,
     PLAYER_PADDING,
     PLAYER_TITLE_FONT_SCALE,
     PLAYER_MOVE_FONT_SCALE,
@@ -64,34 +63,25 @@ class PlayerView:
         self._title = "Player 1" if side == "white" else "Player 2"
 
     def render(self, canvas, rect, snapshot):
-        moves = (
-            snapshot.white_moves
-            if self._side == "white"
-            else snapshot.black_moves
-        )
-        score = (
-            snapshot.white_score
-            if self._side == "white"
-            else snapshot.black_score
-        )
+        moves, score = self._side_data(snapshot)
 
-        x = rect.x
-        y = rect.y
-        w = rect.width
-        h = rect.height
+        panel_x = rect.x
+        panel_y = rect.y
+        panel_width = rect.width
+        panel_height = rect.height
 
         cv2.rectangle(
             canvas,
-            (x, y),
-            (x + w, y + h),
+            (panel_x, panel_y),
+            (panel_x + panel_width, panel_y + panel_height),
             PLAYER_BG_COLOR,
             thickness=-1,
         )
 
-        content_x = x + PLAYER_PADDING
-        content_w = w - 2 * PLAYER_PADDING
+        content_x = panel_x + PLAYER_PADDING
+        content_width = panel_width - 2 * PLAYER_PADDING
 
-        title_y = y + PLAYER_PADDING + 14
+        title_y = panel_y + PLAYER_PADDING + 14
         cv2.putText(
             canvas,
             self._title,
@@ -116,17 +106,23 @@ class PlayerView:
         )
 
         table_y = score_y + PLAYER_PADDING + 6
-        table_h = y + h - PLAYER_PADDING - table_y
+        table_height = panel_y + panel_height - PLAYER_PADDING - table_y
 
-        if table_h > PLAYER_TABLE_HEADER_HEIGHT + PLAYER_TABLE_ROW_HEIGHT:
+        if table_height > PLAYER_TABLE_HEADER_HEIGHT + PLAYER_TABLE_ROW_HEIGHT:
             self._draw_history_table(
                 canvas,
                 content_x,
                 table_y,
-                content_w,
-                table_h,
+                content_width,
+                table_height,
                 moves,
             )
+
+    def _side_data(self, snapshot):
+        if self._side == "white":
+            return snapshot.white_moves, snapshot.white_score
+
+        return snapshot.black_moves, snapshot.black_score
 
     def _draw_history_table(self, canvas, x, y, width, height, moves):
         cv2.rectangle(
@@ -165,60 +161,57 @@ class PlayerView:
             1,
         )
 
-        self._draw_centered_text(
-            canvas,
-            "TIME",
-            x,
-            y,
-            col_width,
-            PLAYER_TABLE_HEADER_HEIGHT,
-            self.HEADER_FONT_SCALE,
-            PLAYER_TABLE_HEADER_COLOR,
-        )
-        self._draw_centered_text(
-            canvas,
-            "MOVE",
-            x + col_width,
-            y,
-            col_width,
-            PLAYER_TABLE_HEADER_HEIGHT,
-            self.HEADER_FONT_SCALE,
-            PLAYER_TABLE_HEADER_COLOR,
-        )
+        for label, column_x in (("TIME", x), ("MOVE", x + col_width)):
+            self._draw_centered_text(
+                canvas,
+                label,
+                column_x,
+                y,
+                col_width,
+                PLAYER_TABLE_HEADER_HEIGHT,
+                self.HEADER_FONT_SCALE,
+                PLAYER_TABLE_HEADER_COLOR,
+            )
 
         rows_top = header_bottom
-        available_h = height - PLAYER_TABLE_HEADER_HEIGHT
-        max_rows = max(0, available_h // PLAYER_TABLE_ROW_HEIGHT)
-        visible = moves[-max_rows:] if max_rows < len(moves) else moves
+        available_height = height - PLAYER_TABLE_HEADER_HEIGHT
+        max_rows = max(0, available_height // PLAYER_TABLE_ROW_HEIGHT)
+        visible_moves = moves[-max_rows:] if max_rows < len(moves) else moves
 
-        for i, record in enumerate(visible):
-            row_y = rows_top + i * PLAYER_TABLE_ROW_HEIGHT
+        for row_index, record in enumerate(visible_moves):
+            row_y = rows_top + row_index * PLAYER_TABLE_ROW_HEIGHT
             if row_y + PLAYER_TABLE_ROW_HEIGHT > y + height:
                 break
 
-            time_text = format_move_time(record.time_ms)
-            move_text = format_move_notation(record)
-
-            self._draw_centered_text(
+            self._draw_table_row(
                 canvas,
-                time_text,
                 x,
                 row_y,
                 col_width,
-                PLAYER_TABLE_ROW_HEIGHT,
-                self.CELL_FONT_SCALE,
-                PLAYER_TABLE_TIME_COLOR,
+                record,
             )
-            self._draw_centered_text(
-                canvas,
-                move_text,
-                x + col_width,
-                row_y,
-                col_width,
-                PLAYER_TABLE_ROW_HEIGHT,
-                self.CELL_FONT_SCALE,
-                PLAYER_MOVE_COLOR,
-            )
+
+    def _draw_table_row(self, canvas, x, row_y, col_width, record):
+        self._draw_centered_text(
+            canvas,
+            format_move_time(record.time_ms),
+            x,
+            row_y,
+            col_width,
+            PLAYER_TABLE_ROW_HEIGHT,
+            self.CELL_FONT_SCALE,
+            PLAYER_TABLE_TIME_COLOR,
+        )
+        self._draw_centered_text(
+            canvas,
+            format_move_notation(record),
+            x + col_width,
+            row_y,
+            col_width,
+            PLAYER_TABLE_ROW_HEIGHT,
+            self.CELL_FONT_SCALE,
+            PLAYER_MOVE_COLOR,
+        )
 
     @staticmethod
     def _draw_centered_text(

@@ -8,8 +8,8 @@ class PieceAnimator:
     This class knows nothing about board geometry or rendering.
     """
 
-    def __init__(self, animation_library):
-        self._animation_library = animation_library
+    def __init__(self, assets_manager):
+        self._assets_manager = assets_manager
 
     def current_frame(self, piece, animation_time_ms):
         """
@@ -18,7 +18,7 @@ class PieceAnimator:
         """
         piece_key = piece.color + piece.piece_type
 
-        frames = self._animation_library.get_frames(
+        frames = self._assets_manager.get_piece_frames(
             piece_key,
             piece.state,
         )

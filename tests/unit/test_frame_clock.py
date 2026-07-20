@@ -34,8 +34,8 @@ def test_piece_animator_frame_index_is_deterministic():
 
 
 def test_piece_animator_returns_same_frame_for_same_time():
-    class FakeLibrary:
-        def get_frames(self, piece_key, state):
+    class FakeAssetsManager:
+        def get_piece_frames(self, piece_key, state):
             return ["a", "b", "c"]
 
     class FakePiece:
@@ -43,7 +43,7 @@ def test_piece_animator_returns_same_frame_for_same_time():
         piece_type = "K"
         state = "idle"
 
-    animator = PieceAnimator(FakeLibrary())
+    animator = PieceAnimator(FakeAssetsManager())
     piece = FakePiece()
 
     first = animator.current_frame(piece, 300)

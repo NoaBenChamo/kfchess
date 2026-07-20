@@ -4,7 +4,6 @@ from input.board_mapper import BoardMapper
 from view.layout.game_layout import GameLayout
 from view.layout.board_geometry import BoardGeometry
 from view.assets.assets_manager import AssetsManager
-from view.animation.animation_library import AnimationLibrary
 from view.pieces.piece_animator import PieceAnimator
 from view.pieces.piece_renderer import PieceRenderer
 from view.board.board_renderer import BoardRenderer
@@ -37,8 +36,7 @@ def create_ui(window_width, window_height) -> UiBundle:
     assets_manager = AssetsManager(board_rect)
     board_geometry = BoardGeometry(board_rect)
 
-    animation_library = AnimationLibrary(assets_manager)
-    piece_animator = PieceAnimator(animation_library)
+    piece_animator = PieceAnimator(assets_manager)
 
     board_view = BoardView(
         board_renderer=BoardRenderer(board_rect, assets_manager),

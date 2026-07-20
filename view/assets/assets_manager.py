@@ -25,11 +25,12 @@ class AssetsManager:
         "w": (200, 200, 200, 255),
         "b": (80, 80, 80, 255),
     }
+    PLACEHOLDER_TEXT_COLOR = (255, 255, 255, 255)
 
     def __init__(self, board_rect):
-        self._board_rect = board_rect
         self._cell_width = board_rect.cell_width
         self._cell_height = board_rect.cell_height
+        self._board_size = (board_rect.width, board_rect.height)
 
         self._board = None
         self._images = {}
@@ -51,7 +52,7 @@ class AssetsManager:
 
         self._board = Img().read(
             board_path,
-            size=(self._board_rect.width, self._board_rect.height),
+            size=self._board_size,
         )
 
     def _load_pieces(self):
@@ -61,29 +62,35 @@ class AssetsManager:
                 self._load_piece_sprites(piece_key)
 
     def _load_piece_sprites(self, piece_key):
-        self._images[piece_key] = {}
+        state_frames = {}
 
         for state in PieceState:
             frames = self._load_state_frames(piece_key, state)
             if not frames:
-                warnings.warn(
-                    f"Missing sprites for {piece_key}/{state.value}",
-                    stacklevel=2,
-                )
-            self._images[piece_key][state] = frames
+                self._warn_missing_sprites(piece_key, state)
+            state_frames[state] = frames
 
-        idle_frames = self._images[piece_key][PieceState.IDLE]
+        idle_frames = state_frames[PieceState.IDLE]
         if not idle_frames:
             idle_frames = [self._get_placeholder(piece_key)]
-            self._images[piece_key][PieceState.IDLE] = idle_frames
+            state_frames[PieceState.IDLE] = idle_frames
             warnings.warn(
                 f"Using placeholder for {piece_key} idle sprites",
                 stacklevel=2,
             )
 
         for state in PieceState:
-            if not self._images[piece_key][state]:
-                self._images[piece_key][state] = list(idle_frames)
+            if not state_frames[state]:
+                state_frames[state] = list(idle_frames)
+
+        self._images[piece_key] = state_frames
+
+    @staticmethod
+    def _warn_missing_sprites(piece_key, state):
+        warnings.warn(
+            f"Missing sprites for {piece_key}/{state.value}",
+            stacklevel=2,
+        )
 
     def _load_state_frames(self, piece_key, state):
         sprites_dir = os.path.join(
@@ -125,22 +132,9 @@ class AssetsManager:
         if piece_key in self._placeholders:
             return self._placeholders[piece_key]
 
-        color = piece_key[0]
-        fill = self.PLACEHOLDER_COLORS.get(
-            color,
-            (128, 128, 128, 255),
-        )
-
-        image = np.zeros(
-            (self._cell_height, self._cell_width, 4),
-            dtype=np.uint8,
-        )
-        image[:, :] = fill
-
         piece_label = piece_key[1]
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = max(0.4, self._cell_height / 120.0)
-        thickness = max(1, int(font_scale * 2))
+        image = self._create_placeholder_image(piece_key[0])
+        font, font_scale, thickness = self._placeholder_text_style()
 
         text_size, _ = cv2.getTextSize(
             piece_label,
@@ -158,7 +152,7 @@ class AssetsManager:
             (text_x, text_y),
             font,
             font_scale,
-            (255, 255, 255, 255),
+            self.PLACEHOLDER_TEXT_COLOR,
             thickness,
             cv2.LINE_AA,
         )
@@ -168,6 +162,24 @@ class AssetsManager:
         self._placeholders[piece_key] = placeholder
 
         return placeholder
+
+    def _create_placeholder_image(self, piece_color):
+        fill = self.PLACEHOLDER_COLORS.get(
+            piece_color,
+            (128, 128, 128, 255),
+        )
+        image = np.zeros(
+            (self._cell_height, self._cell_width, 4),
+            dtype=np.uint8,
+        )
+        image[:, :] = fill
+        return image
+
+    def _placeholder_text_style(self):
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = max(0.4, self._cell_height / 120.0)
+        thickness = max(1, int(font_scale * 2))
+        return font, font_scale, thickness
 
     def get_board(self):
         return self._board

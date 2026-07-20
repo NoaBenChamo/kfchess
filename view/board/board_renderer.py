@@ -20,7 +20,6 @@ class BoardRenderer:
     """
 
     def __init__(self, board_rect, assets_manager):
-        self._board_rect = board_rect
         self._assets_manager = assets_manager
 
         self._cell_width = board_rect.cell_width

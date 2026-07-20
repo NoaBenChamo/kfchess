@@ -10,8 +10,6 @@ class RestOverlayRenderer:
 
     def __init__(self, board_geometry):
         self._geometry = board_geometry
-        self._cell_width = board_geometry.cell_width
-        self._cell_height = board_geometry.cell_height
 
     def render(self, canvas, pieces):
         """
@@ -40,15 +38,17 @@ class RestOverlayRenderer:
         progress,
     ):
         progress = self._clamp_progress(progress)
+        cell_width = self._geometry.cell_width
+        cell_height = self._geometry.cell_height
 
         bar_height = max(
             4,
-            self._cell_height // 10,
+            cell_height // 10,
         )
 
         bar_width = max(
             1,
-            self._cell_width - 8,
+            cell_width - 8,
         )
 
         filled_width = int(bar_width * progress)
@@ -58,7 +58,6 @@ class RestOverlayRenderer:
             dtype=np.uint8,
         )
 
-        # Background
         bar[:, :] = (
             40,
             40,
@@ -66,7 +65,6 @@ class RestOverlayRenderer:
             180,
         )
 
-        # Filled part
         if filled_width > 0:
             red = int(255 * (1.0 - progress))
             green = int(55 + 200 * progress)
@@ -84,7 +82,7 @@ class RestOverlayRenderer:
         image.draw_on(
             canvas,
             x + 4,
-            y + self._cell_height - bar_height - 2,
+            y + cell_height - bar_height - 2,
         )
 
     @staticmethod

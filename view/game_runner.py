@@ -93,10 +93,7 @@ class GameRunner:
             self._frame_clock.tick(TICK_MS)
 
             snapshot = self._engine.create_snapshot()
-            frame = self._renderer.render(
-                snapshot,
-                self._frame_clock.now_ms(),
-            )
+            frame = self._renderer.render(snapshot, self._animation_time_ms())
 
             self._show_frame(frame)
 
@@ -112,49 +109,21 @@ class GameRunner:
 
     def _create_window(self):
         work_width, work_height = get_work_area()
+        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(WINDOW_NAME, work_width, work_height)
+        cv2.moveWindow(WINDOW_NAME, 0, 0)
+        cv2.setMouseCallback(WINDOW_NAME, self._on_mouse)
 
-        cv2.namedWindow(
-            WINDOW_NAME,
-            cv2.WINDOW_NORMAL,
-        )
-
-        cv2.resizeWindow(
-            WINDOW_NAME,
-            work_width,
-            work_height,
-        )
-
-        cv2.moveWindow(
-            WINDOW_NAME,
-            0,
-            0,
-        )
-
-        cv2.setMouseCallback(
-            WINDOW_NAME,
-            self._on_mouse,
-        )
+    def _animation_time_ms(self):
+        return self._frame_clock.now_ms()
 
     def _show_frame(self, frame):
         """
         Displays the frame returned by Renderer.
-
-        Supports either:
-            - a NumPy image
-            - an Img object containing an ``img`` attribute
         """
         if frame is None:
             return
-
-        image = frame.img if hasattr(frame, "img") else frame
-
-        if image is None:
-            return
-
-        cv2.imshow(
-            WINDOW_NAME,
-            image,
-        )
+        cv2.imshow(WINDOW_NAME, frame)
 
     def _wait_for_exit(self):
         """

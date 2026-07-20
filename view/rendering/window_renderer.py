@@ -1,8 +1,4 @@
 from view.rendering.window_composer import WindowComposer
-from view.hud.header_view import HeaderView
-from view.hud.footer_view import FooterView
-from view.hud.player_view import PlayerView
-from view.board.board_view import BoardView
 
 
 class WindowRenderer:
