@@ -1,6 +1,6 @@
 from config.constants import FOOTER_HEIGHT, HEADER_HEIGHT, PLAYER_WIDTH
 from input.screen_rect import ScreenRect
-from view.game_view.game_layout import GameLayout
+from view.layout.game_layout import GameLayout
 
 
 def test_screen_rect_exposes_its_geometry():

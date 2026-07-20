@@ -1,9 +1,8 @@
 from board_io.board_parser import BoardParser
 from engine.game_engine import GameEngine
 from input.controller import Controller
+from view.factory import create_ui
 from view.game_runner import GameRunner, get_work_area
-from view.game_view.game_view import GameView
-from view.rendering.renderer import Renderer
 
 
 INITIAL_BOARD = """
@@ -32,24 +31,18 @@ def create_game():
 
     engine = GameEngine(board)
 
-    work_area_width, work_area_height = get_work_area()
-
-    game_view = GameView(
-        work_area_width,
-        work_area_height,
-    )
+    window_width, window_height = get_work_area()
+    ui = create_ui(window_width, window_height)
 
     controller = Controller(
         game_engine=engine,
-        board_mapper=game_view.board_mapper,
+        board_mapper=ui.board_mapper,
     )
-
-    renderer = Renderer(game_view)
 
     return GameRunner(
         engine=engine,
         controller=controller,
-        renderer=renderer,
+        renderer=ui.renderer,
     )
 
 

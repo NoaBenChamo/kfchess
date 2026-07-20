@@ -1,43 +1,55 @@
-import ctypes
-
 import cv2
 
 from config.constants import TICK_MS, WINDOW_NAME
+from view.frame_clock import FrameClock
 from view.input.input_handler import InputHandler
+
+DEFAULT_WINDOW_WIDTH = 1280
+DEFAULT_WINDOW_HEIGHT = 900
 
 
 def get_work_area():
     """
-    Returns the usable Windows desktop size, excluding the taskbar.
+    Returns the usable desktop size, excluding the taskbar on Windows.
+
+    Falls back to a reasonable default when the OS API is unavailable.
 
     Returns:
         tuple[int, int]: Work-area width and height.
     """
+    try:
+        import ctypes
 
-    class RECT(ctypes.Structure):
-        _fields_ = [
-            ("left", ctypes.c_long),
-            ("top", ctypes.c_long),
-            ("right", ctypes.c_long),
-            ("bottom", ctypes.c_long),
-        ]
+        class RECT(ctypes.Structure):
+            _fields_ = [
+                ("left", ctypes.c_long),
+                ("top", ctypes.c_long),
+                ("right", ctypes.c_long),
+                ("bottom", ctypes.c_long),
+            ]
 
-    rect = RECT()
+        rect = RECT()
 
-    success = ctypes.windll.user32.SystemParametersInfoW(
-        48,
-        0,
-        ctypes.byref(rect),
-        0,
-    )
+        success = ctypes.windll.user32.SystemParametersInfoW(
+            48,
+            0,
+            ctypes.byref(rect),
+            0,
+        )
 
-    if not success:
-        raise RuntimeError("Could not read the Windows work area")
+        if not success:
+            return DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 
-    width = rect.right - rect.left
-    height = rect.bottom - rect.top
+        width = rect.right - rect.left
+        height = rect.bottom - rect.top
 
-    return width, height
+        if width <= 0 or height <= 0:
+            return DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
+
+        return width, height
+
+    except (AttributeError, OSError):
+        return DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 
 
 class GameRunner:
@@ -54,10 +66,11 @@ class GameRunner:
     GameRunner does not contain game rules or drawing logic.
     """
 
-    def __init__(self, engine, controller, renderer):
+    def __init__(self, engine, controller, renderer, frame_clock=None):
         self._engine = engine
         self._renderer = renderer
         self._input_handler = InputHandler(controller)
+        self._frame_clock = frame_clock or FrameClock()
 
         self._running = False
 
@@ -77,9 +90,13 @@ class GameRunner:
     def _run_loop(self):
         while self._running:
             self._engine.tick(TICK_MS)
+            self._frame_clock.tick(TICK_MS)
 
             snapshot = self._engine.create_snapshot()
-            frame = self._renderer.render(snapshot)
+            frame = self._renderer.render(
+                snapshot,
+                self._frame_clock.now_ms(),
+            )
 
             self._show_frame(frame)
 

@@ -8,12 +8,21 @@ class MoveRecord:
         'jump'    — piece lifted in place (right-click)
     """
 
-    def __init__(self, color, piece_type, source, target, move_type="move"):
+    def __init__(
+        self,
+        color,
+        piece_type,
+        source,
+        target,
+        move_type="move",
+        time_ms=None,
+    ):
         self.color = color
         self.piece_type = piece_type
         self.source = source
         self.target = target
         self.move_type = move_type
+        self.time_ms = time_ms
 
     def __str__(self):
         cols = "ABCDEFGH"

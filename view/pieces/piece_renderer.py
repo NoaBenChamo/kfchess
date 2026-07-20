@@ -21,12 +21,15 @@ class PieceRenderer:
         self._cell_width = board_geometry.cell_width
         self._cell_height = board_geometry.cell_height
 
-    def render(self, canvas, pieces):
+    def render(self, canvas, pieces, animation_time_ms):
         """
         Draw all pieces.
         """
         for piece in pieces:
-            frame = self._piece_animator.current_frame(piece)
+            frame = self._piece_animator.current_frame(
+                piece,
+                animation_time_ms,
+            )
 
             if frame is None:
                 continue

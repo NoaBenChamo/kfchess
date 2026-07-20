@@ -1,1 +1,0 @@
-"""Footer view placeholder."""

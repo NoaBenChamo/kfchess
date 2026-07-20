@@ -1,4 +1,5 @@
 import cv2
+
 from config.constants import FOOTER_BG_COLOR
 
 
@@ -6,10 +7,9 @@ class FooterView:
     """
     Bottom area of the screen.
     Currently renders a plain dark bar.
-    Reserved for future status information.
     """
 
-    def render(self, canvas, rect):
+    def render(self, canvas, rect, snapshot):
         cv2.rectangle(
             canvas,
             (rect.x, rect.y),

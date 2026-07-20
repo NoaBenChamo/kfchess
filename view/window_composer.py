@@ -1,1 +1,0 @@
-"""Window composer placeholder."""

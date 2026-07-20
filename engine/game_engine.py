@@ -104,7 +104,14 @@ class GameEngine:
         target_piece = self._board.get(target)
         move_type = "capture" if target_piece is not None else "move"
 
-        record = MoveRecord(piece.color, piece.type, source, target, move_type)
+        record = MoveRecord(
+            piece.color,
+            piece.type,
+            source,
+            target,
+            move_type,
+            time_ms=self._arbiter.get_time(),
+        )
         if piece.color == "w":
             self._white_moves.append(record)
         else:
@@ -196,6 +203,13 @@ class GameEngine:
                 progress=jump.progress_at(current_time),
             ))
 
+        white_score = sum(
+            1 for move in self._white_moves if move.move_type == "capture"
+        )
+        black_score = sum(
+            1 for move in self._black_moves if move.move_type == "capture"
+        )
+
         return GameSnapshot(
             board_width=len(rows[0]) if rows else 0,
             board_height=len(rows),
@@ -204,6 +218,8 @@ class GameEngine:
             game_over=self._game_over,
             white_moves=list(self._white_moves),
             black_moves=list(self._black_moves),
+            white_score=white_score,
+            black_score=black_score,
         )
 
 
@@ -239,7 +255,14 @@ class GameEngine:
         )
 
         # רישום הקפיצה להיסטוריה
-        jump_record = MoveRecord(piece.color, piece.type, position, position, "jump")
+        jump_record = MoveRecord(
+            piece.color,
+            piece.type,
+            position,
+            position,
+            "jump",
+            time_ms=self._arbiter.get_time(),
+        )
         if piece.color == "w":
             self._white_moves.append(jump_record)
         else:

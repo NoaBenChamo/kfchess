@@ -1,1 +1,0 @@
-"""Image asset placeholder."""

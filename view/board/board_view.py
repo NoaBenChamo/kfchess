@@ -1,6 +1,6 @@
 class BoardView:
     """
-    Coordinates the rendering of the board.
+    Coordinates the rendering of the board region.
 
     Rendering order:
         1. Static board
@@ -12,70 +12,56 @@ class BoardView:
 
     def __init__(
         self,
-        board_rect,
-        canvas_width,
-        canvas_height,
         board_renderer,
         highlight_renderer,
         piece_renderer,
         rest_overlay_renderer,
         game_over_renderer,
     ):
-        self._board_rect = board_rect
-        self._canvas_width = canvas_width
-        self._canvas_height = canvas_height
-
         self._board_renderer = board_renderer
         self._highlight_renderer = highlight_renderer
         self._piece_renderer = piece_renderer
         self._rest_overlay_renderer = rest_overlay_renderer
         self._game_over_renderer = game_over_renderer
 
-        self._canvas = None
-
-    def render(self, snapshot):
+    def render(self, canvas, rect, snapshot, animation_time_ms):
         """
-        Renders one complete board frame.
+        Renders the board into the given window region.
         """
-        self._canvas = self._board_renderer.create_canvas(
-            canvas_width=self._canvas_width,
-            canvas_height=self._canvas_height,
+        local = self._board_renderer.create_canvas(
+            canvas_width=rect.width,
+            canvas_height=rect.height,
         )
 
         self._highlight_renderer.render(
-            canvas=self._canvas,
-            selected_cell=snapshot.selected_cell,
+            local,
+            snapshot.selected_cell,
         )
 
         self._piece_renderer.render(
-            canvas=self._canvas,
-            pieces=snapshot.pieces,
+            local,
+            snapshot.pieces,
+            animation_time_ms,
         )
 
         self._rest_overlay_renderer.render(
-            canvas=self._canvas,
-            pieces=snapshot.pieces,
+            local,
+            snapshot.pieces,
         )
 
         if snapshot.game_over:
-            self._game_over_renderer.render(
-                self._canvas
-            )
+            self._game_over_renderer.render(local)
 
-    def get_canvas(self):
-        """
-        Returns the rendered board canvas.
-        """
-        return self._canvas
+        self._paste(canvas, local.img, rect)
 
-    @property
-    def board_rect(self):
-        return self._board_rect
+    @staticmethod
+    def _paste(window, image, rect):
+        if image is None:
+            return
 
-    @property
-    def canvas_width(self):
-        return self._canvas_width
+        h, w = image.shape[:2]
 
-    @property
-    def canvas_height(self):
-        return self._canvas_height
+        window[
+            rect.y:rect.y + h,
+            rect.x:rect.x + w,
+        ] = image

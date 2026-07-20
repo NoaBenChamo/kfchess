@@ -84,11 +84,12 @@ class BoardRenderer:
         img = Img()
         img.img = canvas
 
+        self._canvas_width = canvas_width
+        self._canvas_height = canvas_height
+
         self._draw_labels(img)
 
         self._clean_canvas = img.img.copy()
-        self._canvas_width = canvas_width
-        self._canvas_height = canvas_height
 
     def _draw_labels(self, canvas):
         font = cv2.FONT_HERSHEY_SIMPLEX
