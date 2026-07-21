@@ -57,20 +57,21 @@ class GameRunner:
     Runs the main game loop.
 
     Responsible for:
-        - advancing the game clock
+        - advancing the play session
         - creating snapshots
         - rendering frames
         - forwarding keyboard and mouse input
         - opening and closing the OpenCV window
 
-    GameRunner does not contain game rules or drawing logic.
+    GameRunner does not contain game rules, networking, or drawing logic.
     """
 
-    def __init__(self, engine, controller, renderer, frame_clock=None):
-        self._engine = engine
+    def __init__(self, session, controller, renderer, window_name=None, frame_clock=None):
+        self._session = session
         self._renderer = renderer
         self._input_handler = InputHandler(controller)
         self._frame_clock = frame_clock or FrameClock()
+        self._window_name = window_name or WINDOW_NAME
 
         self._running = False
 
@@ -85,14 +86,14 @@ class GameRunner:
             self._run_loop()
         finally:
             self._running = False
-            cv2.destroyAllWindows()
+            cv2.destroyWindow(self._window_name)
 
     def _run_loop(self):
         while self._running:
-            self._engine.tick(TICK_MS)
+            self._session.pump(TICK_MS)
             self._frame_clock.tick(TICK_MS)
 
-            snapshot = self._engine.create_snapshot()
+            snapshot = self._session.create_snapshot()
             frame = self._renderer.render(snapshot, self._animation_time_ms())
 
             self._show_frame(frame)
@@ -109,10 +110,10 @@ class GameRunner:
 
     def _create_window(self):
         work_width, work_height = get_work_area()
-        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(WINDOW_NAME, work_width, work_height)
-        cv2.moveWindow(WINDOW_NAME, 0, 0)
-        cv2.setMouseCallback(WINDOW_NAME, self._on_mouse)
+        cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(self._window_name, work_width, work_height)
+        cv2.moveWindow(self._window_name, 0, 0)
+        cv2.setMouseCallback(self._window_name, self._on_mouse)
 
     def _animation_time_ms(self):
         return self._frame_clock.now_ms()
@@ -123,7 +124,7 @@ class GameRunner:
         """
         if frame is None:
             return
-        cv2.imshow(WINDOW_NAME, frame)
+        cv2.imshow(self._window_name, frame)
 
     def _wait_for_exit(self):
         """

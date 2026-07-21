@@ -2,6 +2,7 @@ from board_io.board_parser import BoardParser
 from bus.events import GameStartedEvent, GameOverEvent
 from engine.game_engine import GameEngine
 from input.controller import Controller
+from session.local_session import LocalSession
 from view.audio.sound_player import SoundPlayer
 from view.factory import create_ui
 from view.game_runner import GameRunner, get_work_area
@@ -44,13 +45,14 @@ def create_game():
     window_width, window_height = get_work_area()
     ui = create_ui(window_width, window_height)
 
+    session = LocalSession(engine)
     controller = Controller(
-        game_engine=engine,
+        session=session,
         board_mapper=ui.board_mapper,
     )
 
     return GameRunner(
-        engine=engine,
+        session=session,
         controller=controller,
         renderer=ui.renderer,
     )

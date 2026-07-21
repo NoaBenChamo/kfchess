@@ -7,9 +7,8 @@ from shared.protocol import decode_message, encode_message
 
 class NetworkClient:
     """
-    Thin WebSocket client for Stage B.1.
+    WebSocket client for sending/receiving protocol JSON envelopes
 
-    Sends/receives protocol JSON envelopes. No game logic.
     """
 
     def __init__(self, uri):

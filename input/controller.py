@@ -1,15 +1,25 @@
+from model.position import Position
+from snapshots.piece_snapshot import PieceSnapshot
+
+
 class Controller:
     """
-    Translates user actions into GameEngine commands.
+    Translates user actions into PlaySession commands.
 
     Responsible for:
         - mapping screen coordinates to board positions
         - handling selection flow
-        - forwarding move, jump and time commands to the engine
+        - forwarding move and jump requests to the session
+
+  Selection behavior:
+        - First click selects a piece (session decides whether selection is valid).
+        - Second click on another friendly piece swaps selection.
+        - Second click elsewhere requests a move to that square.
+        - Move requests are forwarded without assuming synchronous success.
     """
 
-    def __init__(self, game_engine, board_mapper):
-        self._game_engine = game_engine
+    def __init__(self, session, board_mapper):
+        self._session = session
         self._board_mapper = board_mapper
 
     def click(self, x, y):
@@ -21,10 +31,10 @@ class Controller:
         if position is None:
             return
 
-        selected = self._game_engine.get_selected()
+        selected = self._session.get_selected()
 
         if selected is None:
-            self._game_engine.select(position)
+            self._session.select(position)
             return
 
         self._handle_selected_click(
@@ -41,35 +51,41 @@ class Controller:
         if position is None:
             return
 
-        self._game_engine.jump(position)
-
-    def tick(self, ms):
-        """
-        Advances game time by the given number of milliseconds.
-        """
-        self._game_engine.tick(ms)
+        self._session.request_jump_to(position)
 
     def wait(self, ms):
         """
-        Backward-compatible alias for tick().
+        Advances session time by the given number of milliseconds.
         """
-        self.tick(ms)
+        self._session.pump(ms)
+
+    def tick(self, ms):
+        """
+        Backward-compatible alias for wait().
+        """
+        self.wait(ms)
 
     def get_board(self):
         """
-        Returns the current board model.
+        Returns the local board model when the session supports it.
         """
-        return self._game_engine.get_board()
+        getter = getattr(self._session, "get_board", None)
+        if getter is None:
+            raise RuntimeError("get_board is only available in local mode")
+        return getter()
 
     def _handle_selected_click(
         self,
         selected_position,
         clicked_position,
     ):
-        board = self._game_engine.get_board()
+        snapshot = self._session.create_snapshot()
+        selected_piece = self._piece_at(snapshot, selected_position)
+        clicked_piece = self._piece_at(snapshot, clicked_position)
 
-        selected_piece = board.get(selected_position)
-        clicked_piece = board.get(clicked_position)
+        if selected_piece is None:
+            self._session.clear_selection()
+            return
 
         if self._is_other_friendly_piece(
             selected_piece=selected_piece,
@@ -77,14 +93,18 @@ class Controller:
             selected_position=selected_position,
             clicked_position=clicked_position,
         ):
-            self._replace_selection(clicked_position)
+            self._session.clear_selection()
+            self._session.select(clicked_position)
             return
 
-        self._game_engine.move_request(clicked_position)
+        self._session.request_move_to(clicked_position)
 
-    def _replace_selection(self, position):
-        self._game_engine.clear_selection()
-        self._game_engine.select(position)
+    @staticmethod
+    def _piece_at(snapshot, position):
+        for piece in snapshot.pieces:
+            if piece.position.row == position.row and piece.position.col == position.col:
+                return piece
+        return None
 
     @staticmethod
     def _is_other_friendly_piece(
@@ -94,7 +114,7 @@ class Controller:
         clicked_position,
     ):
         return (
-            selected_piece is not None
+            isinstance(selected_piece, PieceSnapshot)
             and clicked_piece is not None
             and selected_piece.color == clicked_piece.color
             and selected_position != clicked_position

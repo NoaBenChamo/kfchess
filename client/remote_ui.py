@@ -1,12 +1,12 @@
 import argparse
+import os
 import sys
 
-from client.remote_controller import RemoteController
-from client.remote_game_runner import RemoteGameRunner
 from client.remote_session import RemoteSession
+from input.controller import Controller
 from server.config import DEFAULT_HOST, DEFAULT_PORT
 from view.factory import create_ui
-from view.game_runner import get_work_area
+from view.game_runner import GameRunner, get_work_area
 
 
 def run_remote_ui(host=DEFAULT_HOST, port=DEFAULT_PORT):
@@ -16,11 +16,12 @@ def run_remote_ui(host=DEFAULT_HOST, port=DEFAULT_PORT):
 
     window_width, window_height = get_work_area()
     ui = create_ui(window_width, window_height)
-    controller = RemoteController(session, ui.board_mapper)
-    runner = RemoteGameRunner(
+    controller = Controller(session, ui.board_mapper)
+    runner = GameRunner(
         session=session,
         controller=controller,
         renderer=ui.renderer,
+        window_name=f"KFChess Remote {os.getpid()}",
     )
 
     try:
