@@ -22,7 +22,8 @@ class RealTimeArbiter:
         self._active_moves = []
         self._active_jumps = []
         self._game_events = []
-        self._landed_via_move = {}  
+        self._landed_via_move = {}
+        self._winner_color = None
 
 
     # מוסיף תנועה פעילה לרשימת התנועות
@@ -106,7 +107,7 @@ class RealTimeArbiter:
 
             # בדיקה אם נלכד מלך
             if GameOverRule.is_king_captured(move.piece):
-                self._game_events.append("GAME_OVER")
+                self._declare_winner_by_captured_king(move.piece)
 
             return
 
@@ -173,7 +174,7 @@ class RealTimeArbiter:
 
         # Capturing a king ends the game before any pawn-promotion logic.
         if GameOverRule.is_king_captured(target_piece):
-            self._game_events.append("GAME_OVER")
+            self._declare_winner_by_captured_king(target_piece)
             return
 
         # בדיקת קידום רגלי
@@ -248,7 +249,7 @@ class RealTimeArbiter:
         self._set_short_rest(jump.piece)
 
         if GameOverRule.is_king_captured(piece_on_square):
-            self._game_events.append("GAME_OVER")
+            self._declare_winner_by_captured_king(piece_on_square)
 
 
     # מחזיר את האירועים שנצברו ומנקה את הרשימה
@@ -257,6 +258,16 @@ class RealTimeArbiter:
         events = self._game_events[:]
         self._game_events.clear()
         return events
+
+    def get_winner_color(self):
+        return self._winner_color
+
+    def _declare_winner_by_captured_king(self, captured_piece):
+        if captured_piece.color.lower() == "w":
+            self._winner_color = "b"
+        else:
+            self._winner_color = "w"
+        self._game_events.append("GAME_OVER")
 
 
     # בודק אם כלי במיקום נתון נמצא כרגע בתנועה פעילה

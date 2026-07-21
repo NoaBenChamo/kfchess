@@ -28,7 +28,11 @@ def _sample_snapshot(sequence=0, pieces=None):
 
 
 def _make_session_with_identity(color="w", pieces=None):
-    session = RemoteSession("ws://unused", username="Alice")
+    session = RemoteSession(
+        "ws://unused",
+        username="Alice",
+        password="secret",
+    )
     session.state.handle_message({
         "type": "identity_assigned",
         "payload": {
@@ -99,7 +103,11 @@ def test_remote_session_request_move_to_queues_command_without_mutating_board():
 
 
 def test_remote_session_pump_applies_incoming_messages():
-    session = RemoteSession("ws://unused", username="Alice")
+    session = RemoteSession(
+        "ws://unused",
+        username="Alice",
+        password="secret",
+    )
     session._incoming.put({
         "type": "state_snapshot",
         "payload": _sample_snapshot(3),

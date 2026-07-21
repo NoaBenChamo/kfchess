@@ -11,7 +11,9 @@ class ClientState:
         self.selected = None
         self.sequence = -1
         self.last_error = None
+        self.user_id = None
         self.username = None
+        self.rating = None
         self.assigned_color = None
 
     @property
@@ -27,6 +29,21 @@ class ClientState:
     def handle_message(self, message):
         message_type = message.get("type")
         payload = message.get("payload") or {}
+
+        if message_type == "auth_ok":
+            self.user_id = payload.get("user_id")
+            self.username = payload.get("username")
+            self.rating = payload.get("rating")
+            self.last_error = None
+            return
+
+        if message_type == "game_over":
+            ratings = payload.get("ratings") or {}
+            assigned = self.assigned_color
+            if assigned and assigned in ratings:
+                self.rating = ratings[assigned].get("rating_after", self.rating)
+            self.last_error = None
+            return
 
         if message_type == "identity_assigned":
             self.username = payload.get("username")

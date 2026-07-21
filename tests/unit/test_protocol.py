@@ -4,6 +4,7 @@ from shared.protocol import (
     ProtocolError,
     USERNAME_MAX_LENGTH,
     decode_message,
+    encode_auth_ok,
     encode_error,
     encode_identity_assigned,
     encode_message,
@@ -135,3 +136,31 @@ def test_encode_identity_assigned_shape():
 def test_encode_identity_assigned_rejects_invalid_color():
     with pytest.raises(ProtocolError, match="color"):
         encode_identity_assigned("Noa", "x")
+
+
+def test_register_encode_decode_roundtrip():
+    raw = encode_message(
+        "register",
+        payload={"username": "  Noa  ", "password": "secret1"},
+    )
+    message = decode_message(raw)
+    assert message["type"] == "register"
+    assert message["payload"]["username"] == "Noa"
+    assert message["payload"]["password"] == "secret1"
+
+
+def test_login_without_password_is_rejected():
+    with pytest.raises(ProtocolError, match="password"):
+        decode_message(
+            '{"type": "login", "payload": {"username": "Noa"}}'
+        )
+
+
+def test_encode_auth_ok_shape():
+    message = decode_message(encode_auth_ok(1, "Noa", 1200))
+    assert message["type"] == "auth_ok"
+    assert message["payload"] == {
+        "user_id": 1,
+        "username": "Noa",
+        "rating": 1200,
+    }

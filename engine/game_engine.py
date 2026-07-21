@@ -150,10 +150,11 @@ class GameEngine:
     def is_game_over(self):
         return self._game_over
 
+    def get_winner(self):
+        return self._arbiter.get_winner_color()
 
     def get_selected(self):
         return self._selected
-
 
     def set_game_over(self):
         self._apply_game_over()

@@ -34,6 +34,38 @@ class Match:
         self._closed = False
         self._tick_task = None
         self._last_state_key = self._state_key()
+        self.db_game_id = None
+        self.rated = False
+        self._result_recorded = False
+        self._game_over_handler = None
+
+    def set_game_over_handler(self, handler):
+        """Optional async callback: await handler(match) once when game ends."""
+        self._game_over_handler = handler
+
+    def player_for_color(self, color):
+        return self._players.get(color)
+
+    def detect_winner_color(self):
+        """Prefer arbiter winner (king capture); fall back to remaining kings."""
+        winner = self.engine.get_winner()
+        if winner is not None:
+            return winner
+
+        white_king = False
+        black_king = False
+        for piece in self.engine.create_snapshot().pieces:
+            if piece.piece_type != "K":
+                continue
+            if piece.color.lower() == "w":
+                white_king = True
+            else:
+                black_king = True
+        if white_king and not black_king:
+            return "w"
+        if black_king and not white_king:
+            return "b"
+        return None
 
     def bump_sequence(self):
         self.sequence += 1
@@ -134,10 +166,15 @@ class Match:
         try:
             while not self._closed:
                 await asyncio.sleep(interval)
+                just_ended = False
                 async with self.lock:
+                    was_over = self.engine.is_game_over()
                     changed = self.advance_time(tick_ms)
+                    just_ended = self.engine.is_game_over() and not was_over
                     if changed:
                         await self.broadcast_snapshot()
+                if just_ended and self._game_over_handler is not None:
+                    await self._game_over_handler(self)
         except asyncio.CancelledError:
             raise
 
@@ -163,6 +200,13 @@ class Match:
     async def broadcast_snapshot(self):
         payload = self.snapshot_payload()
         message = encode_message("state_snapshot", payload=payload)
+        await self._broadcast_raw(message)
+
+    async def broadcast_message(self, message_type, payload):
+        message = encode_message(message_type, payload=payload)
+        await self._broadcast_raw(message)
+
+    async def _broadcast_raw(self, message):
         dead = []
         for websocket in list(self._connections):
             try:

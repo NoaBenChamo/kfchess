@@ -1,4 +1,5 @@
 import argparse
+import getpass
 import os
 import sys
 
@@ -16,20 +17,44 @@ def prompt_username():
         return ""
 
 
-def run_remote_ui(host=DEFAULT_HOST, port=DEFAULT_PORT, username=None):
+def prompt_password():
+    try:
+        return getpass.getpass("Password: ")
+    except EOFError:
+        return ""
+
+
+def run_remote_ui(
+    host=DEFAULT_HOST,
+    port=DEFAULT_PORT,
+    username=None,
+    password=None,
+    auth_mode="login",
+):
     if username is None:
         username = prompt_username()
     if not username:
         print("username is required", file=sys.stderr)
         return 2
 
+    if password is None:
+        password = prompt_password()
+    if not password:
+        print("password is required", file=sys.stderr)
+        return 2
+
     uri = f"ws://{host}:{port}"
-    session = RemoteSession(uri, username=username)
+    session = RemoteSession(
+        uri,
+        username=username,
+        password=password,
+        auth_mode=auth_mode,
+    )
 
     try:
         session.start()
     except IdentifyError as exc:
-        print(f"identify failed: {exc.code} — {exc.message}", file=sys.stderr)
+        print(f"auth/identify failed: {exc.code} — {exc.message}", file=sys.stderr)
         return 1
     except TimeoutError as exc:
         print(str(exc), file=sys.stderr)
@@ -37,7 +62,10 @@ def run_remote_ui(host=DEFAULT_HOST, port=DEFAULT_PORT, username=None):
         return 1
 
     color = session.state.assigned_color
-    print(f"Joined as {session.state.username} ({color})")
+    rating = session.state.rating
+    print(
+        f"Joined as {session.state.username} ({color}), rating={rating}"
+    )
 
     window_width, window_height = get_work_area()
     ui = create_ui(window_width, window_height)
@@ -60,14 +88,26 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="KFChess remote OpenCV client")
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--username", default=None)
     parser.add_argument(
-        "--username",
+        "--password",
         default=None,
-        help="Skip the Shell prompt and use this username",
+        help="Prefer interactive prompt; flag is for local testing only",
+    )
+    parser.add_argument(
+        "--register",
+        action="store_true",
+        help="Register a new account instead of logging in",
     )
     args = parser.parse_args(argv)
     raise SystemExit(
-        run_remote_ui(host=args.host, port=args.port, username=args.username)
+        run_remote_ui(
+            host=args.host,
+            port=args.port,
+            username=args.username,
+            password=args.password,
+            auth_mode="register" if args.register else "login",
+        )
     )
 
 

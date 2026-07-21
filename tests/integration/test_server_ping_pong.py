@@ -5,8 +5,10 @@ from websockets.asyncio.client import connect
 from websockets.asyncio.server import serve
 
 from client.network_client import NetworkClient
+from server.dal.database import Database
 from server.game_server import GameServer
 from shared.protocol import (
+    INVALID_CREDENTIALS,
     NOT_AUTHENTICATED,
     NOT_YOUR_PIECE,
     SERVER_FULL,
@@ -17,8 +19,8 @@ from shared.protocol import (
 from shared.squares import square_to_position
 
 
-async def _start_server(start_ticks=False, tick_ms=20):
-    game_server = GameServer(tick_ms=tick_ms)
+async def _start_server(start_ticks=False, tick_ms=20, database=None):
+    game_server = GameServer(tick_ms=tick_ms, database=database)
     if start_ticks:
         await game_server.start()
     server = await serve(game_server.handler, "127.0.0.1", 0)
@@ -35,9 +37,15 @@ async def _stop_server(game_server, server):
 async def _identify_as(client, username):
     response = await client.identify(username)
     assert response["type"] == "identity_assigned"
-    # Drain the initial state_snapshot that follows identity_assigned.
     await client.receive_until("state_snapshot")
     return response
+
+
+async def _register_and_identify(client, username, password="secret"):
+    auth = await client.register(username, password)
+    assert auth["type"] == "auth_ok"
+    assert auth["payload"]["rating"] == 1200
+    return await _identify_as(client, username)
 
 
 @pytest.mark.asyncio
@@ -94,7 +102,7 @@ async def test_valid_move_returns_move_accepted():
     game_server, server, port = await _start_server()
     try:
         async with NetworkClient(f"ws://127.0.0.1:{port}") as client:
-            await _identify_as(client, "Alice")
+            await _register_and_identify(client, "Alice")
             response = await client.send_move("WPe2e4")
 
         assert response["type"] == "move_accepted"
@@ -112,7 +120,7 @@ async def test_invalid_move_command_returns_error():
     game_server, server, port = await _start_server()
     try:
         async with NetworkClient(f"ws://127.0.0.1:{port}") as client:
-            await _identify_as(client, "Alice")
+            await _register_and_identify(client, "Alice")
             response = await client.send_move("NOPE")
 
         assert response["type"] == "error"
@@ -126,7 +134,7 @@ async def test_illegal_engine_move_returns_error():
     game_server, server, port = await _start_server()
     try:
         async with NetworkClient(f"ws://127.0.0.1:{port}") as client:
-            await _identify_as(client, "Alice")
+            await _register_and_identify(client, "Alice")
             response = await client.send_move("WPe2e5")
 
         assert response["type"] == "error"
@@ -140,7 +148,7 @@ async def test_ping_still_works_after_move_handling():
     game_server, server, port = await _start_server()
     try:
         async with NetworkClient(f"ws://127.0.0.1:{port}") as client:
-            await _identify_as(client, "Alice")
+            await _register_and_identify(client, "Alice")
             move_response = await client.send_move("WPe2e4")
             pong = await client.ping()
 
@@ -155,7 +163,7 @@ async def test_server_tick_broadcasts_until_motion_settles():
     game_server, server, port = await _start_server(start_ticks=True, tick_ms=20)
     try:
         async with NetworkClient(f"ws://127.0.0.1:{port}") as client:
-            await _identify_as(client, "Alice")
+            await _register_and_identify(client, "Alice")
             accepted = await client.send_move("WPe2e4")
             assert accepted["type"] == "move_accepted"
 
@@ -188,8 +196,8 @@ async def test_two_clients_receive_same_snapshot_sequence():
     uri = f"ws://127.0.0.1:{port}"
     try:
         async with NetworkClient(uri) as client_a, NetworkClient(uri) as client_b:
-            identity_a = await _identify_as(client_a, "Alice")
-            identity_b = await _identify_as(client_b, "Bob")
+            identity_a = await _register_and_identify(client_a, "Alice")
+            identity_b = await _register_and_identify(client_b, "Bob")
             assert identity_a["payload"]["color"] == "w"
             assert identity_b["payload"]["color"] == "b"
 
@@ -214,8 +222,8 @@ async def test_first_identify_is_white_second_is_black():
     uri = f"ws://127.0.0.1:{port}"
     try:
         async with NetworkClient(uri) as client_a, NetworkClient(uri) as client_b:
-            a = await client_a.identify("Alice")
-            b = await client_b.identify("Bob")
+            a = await _register_and_identify(client_a, "Alice")
+            b = await _register_and_identify(client_b, "Bob")
             assert a["payload"]["color"] == "w"
             assert b["payload"]["color"] == "b"
     finally:
@@ -232,8 +240,10 @@ async def test_third_identify_returns_server_full():
             NetworkClient(uri) as client_b,
             NetworkClient(uri) as client_c,
         ):
-            await _identify_as(client_a, "Alice")
-            await _identify_as(client_b, "Bob")
+            await _register_and_identify(client_a, "Alice")
+            await _register_and_identify(client_b, "Bob")
+            auth = await client_c.register("Carol", "secret")
+            assert auth["type"] == "auth_ok"
             response = await client_c.identify("Carol")
             assert response["type"] == "error"
             assert response["payload"]["code"] == SERVER_FULL
@@ -242,15 +252,16 @@ async def test_third_identify_returns_server_full():
 
 
 @pytest.mark.asyncio
-async def test_duplicate_username_returns_username_taken():
+async def test_duplicate_register_returns_username_taken():
     game_server, server, port = await _start_server()
     uri = f"ws://127.0.0.1:{port}"
     try:
         async with NetworkClient(uri) as client_a, NetworkClient(uri) as client_b:
-            await _identify_as(client_a, "Alice")
-            response = await client_b.identify("alice")
-            assert response["type"] == "error"
-            assert response["payload"]["code"] == USERNAME_TAKEN
+            first = await client_a.register("Alice", "secret")
+            assert first["type"] == "auth_ok"
+            second = await client_b.register("Alice", "other")
+            assert second["type"] == "error"
+            assert second["payload"]["code"] == USERNAME_TAKEN
     finally:
         await _stop_server(game_server, server)
 
@@ -268,11 +279,23 @@ async def test_move_before_identify_returns_not_authenticated():
 
 
 @pytest.mark.asyncio
+async def test_identify_before_login_returns_not_authenticated():
+    game_server, server, port = await _start_server()
+    try:
+        async with NetworkClient(f"ws://127.0.0.1:{port}") as client:
+            response = await client.identify("Alice")
+        assert response["type"] == "error"
+        assert response["payload"]["code"] == NOT_AUTHENTICATED
+    finally:
+        await _stop_server(game_server, server)
+
+
+@pytest.mark.asyncio
 async def test_white_cannot_move_black_piece():
     game_server, server, port = await _start_server()
     try:
         async with NetworkClient(f"ws://127.0.0.1:{port}") as client:
-            await _identify_as(client, "Alice")
+            await _register_and_identify(client, "Alice")
             response = await client.send_move("BPe7e5")
         assert response["type"] == "error"
         assert response["payload"]["code"] == NOT_YOUR_PIECE
@@ -286,8 +309,8 @@ async def test_black_cannot_move_white_piece():
     uri = f"ws://127.0.0.1:{port}"
     try:
         async with NetworkClient(uri) as white, NetworkClient(uri) as black:
-            await _identify_as(white, "Alice")
-            await _identify_as(black, "Bob")
+            await _register_and_identify(white, "Alice")
+            await _register_and_identify(black, "Bob")
             response = await black.send_move("WPe2e4")
         assert response["type"] == "error"
         assert response["payload"]["code"] == NOT_YOUR_PIECE
@@ -301,16 +324,47 @@ async def test_disconnect_frees_seat_for_next_player():
     uri = f"ws://127.0.0.1:{port}"
     try:
         async with NetworkClient(uri) as client_a:
-            await _identify_as(client_a, "Alice")
+            await _register_and_identify(client_a, "Alice")
             async with NetworkClient(uri) as client_b:
-                await _identify_as(client_b, "Bob")
+                await _register_and_identify(client_b, "Bob")
 
         await asyncio.sleep(0.05)
         match = game_server.registry.get("default")
         assert match.player_count() == 0
 
         async with NetworkClient(uri) as client_c:
-            identity = await _identify_as(client_c, "Carol")
+            identity = await _register_and_identify(client_c, "Carol")
             assert identity["payload"]["color"] == "w"
     finally:
         await _stop_server(game_server, server)
+
+
+@pytest.mark.asyncio
+async def test_register_then_login_on_new_connection_uses_sqlite():
+    database = Database(":memory:")
+    database.connect()
+    database.initialize_schema()
+    game_server, server, port = await _start_server(database=database)
+    uri = f"ws://127.0.0.1:{port}"
+    try:
+        async with NetworkClient(uri) as client:
+            auth = await client.register("Noa", "secret1")
+            assert auth["type"] == "auth_ok"
+            assert auth["payload"]["user_id"] == 1
+            assert auth["payload"]["rating"] == 1200
+
+        async with NetworkClient(uri) as client:
+            bad = await client.login("Noa", "wrong")
+            assert bad["type"] == "error"
+            assert bad["payload"]["code"] == INVALID_CREDENTIALS
+
+            auth = await client.login("Noa", "secret1")
+            assert auth["type"] == "auth_ok"
+            assert auth["payload"]["username"] == "Noa"
+            assert auth["payload"]["rating"] == 1200
+
+            identity = await _identify_as(client, "Noa")
+            assert identity["payload"]["color"] == "w"
+    finally:
+        await _stop_server(game_server, server)
+        database.close()

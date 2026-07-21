@@ -100,7 +100,11 @@ class _RecordingSession:
 
 
 def test_controller_with_remote_session_sends_move_command_after_two_clicks():
-    session = RemoteSession("ws://unused", username="Alice")
+    session = RemoteSession(
+        "ws://unused",
+        username="Alice",
+        password="secret",
+    )
     session.state.handle_message({
         "type": "identity_assigned",
         "payload": {"username": "Alice", "color": "w", "game_id": "default"},

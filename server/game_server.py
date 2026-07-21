@@ -1,9 +1,13 @@
 import logging
 
+from server.auth_service import AuthError, AuthService
 from server.client_session import ClientSession
 from server.config import TICK_MS
+from server.dal.database import Database
+from server.dal.repositories import GameRepository, UserRepository
 from server.game_command_handler import GameCommandHandler
 from server.game_registry import GameRegistry
+from server.rating_service import RatingService
 from server.snapshot_serializer import snapshot_to_dict
 from shared.protocol import (
     INVALID_MESSAGE,
@@ -11,7 +15,9 @@ from shared.protocol import (
     NOT_AUTHENTICATED,
     ProtocolError,
     decode_message,
+    encode_auth_ok,
     encode_error,
+    encode_game_over,
     encode_identity_assigned,
     encode_message,
 )
@@ -23,12 +29,19 @@ DEFAULT_GAME_ID = "default"
 
 class GameServer:
     """
-    WebSocket server for Stage C.
+    WebSocket server for Stage D.
 
-    Connections must identify before joining a match seat and receiving snapshots.
+    Connections must register/login, then identify into a match seat.
     """
 
-    def __init__(self, registry=None, command_handler=None, tick_ms=TICK_MS):
+    def __init__(
+        self,
+        registry=None,
+        command_handler=None,
+        tick_ms=TICK_MS,
+        database=None,
+        auth_service=None,
+    ):
         self._connections = set()
         self._sessions = {}
         self._registry = registry if registry is not None else GameRegistry()
@@ -42,14 +55,42 @@ class GameServer:
         self._tick_ms = tick_ms
         self._started = False
 
+        self._owns_database = database is None
+        if database is None:
+            self._database = Database(":memory:")
+            self._database.connect()
+            self._database.initialize_schema()
+        else:
+            self._database = database
+            try:
+                self._database.connection
+            except RuntimeError:
+                self._database.connect()
+                self._database.initialize_schema()
+
+        self._auth = (
+            auth_service
+            if auth_service is not None
+            else AuthService(UserRepository(self._database))
+        )
+        users = UserRepository(self._database)
+        games = GameRepository(self._database)
+        self._users = users
+        self._rating = RatingService(users, games)
+
     @property
     def registry(self):
         return self._registry
+
+    @property
+    def database(self):
+        return self._database
 
     async def start(self):
         if self._started:
             return
         for match in self._registry.all_matches():
+            match.set_game_over_handler(self._on_match_game_over)
             await match.start_tick_loop(self._tick_ms)
         self._started = True
 
@@ -57,6 +98,8 @@ class GameServer:
         for match in self._registry.all_matches():
             await match.stop()
         self._started = False
+        if self._owns_database:
+            self._database.close()
 
     async def handler(self, websocket):
         match = self._registry.get(DEFAULT_GAME_ID)
@@ -77,11 +120,11 @@ class GameServer:
         try:
             message = decode_message(raw)
         except ProtocolError as exc:
-            code = (
-                INVALID_USERNAME
-                if "username" in str(exc).lower()
-                else INVALID_MESSAGE
-            )
+            text = str(exc).lower()
+            if "username" in text:
+                code = INVALID_USERNAME
+            else:
+                code = INVALID_MESSAGE
             await websocket.send(encode_error(code, str(exc)))
             return
 
@@ -95,6 +138,14 @@ class GameServer:
                     request_id=message["request_id"],
                 )
             await websocket.send(response)
+            return
+
+        if message_type == "register":
+            await self._handle_register(websocket, message)
+            return
+
+        if message_type == "login":
+            await self._handle_login(websocket, message)
             return
 
         if message_type == "identify":
@@ -112,6 +163,56 @@ class GameServer:
             )
         )
 
+    async def _handle_register(self, websocket, message):
+        session = self._sessions.get(websocket)
+        if session is None:
+            await websocket.send(
+                encode_error(INVALID_MESSAGE, "unknown connection")
+            )
+            return
+        if session.is_authenticated:
+            await websocket.send(
+                encode_error(INVALID_MESSAGE, "already authenticated")
+            )
+            return
+
+        payload = message["payload"]
+        try:
+            user = self._auth.register(payload["username"], payload["password"])
+        except AuthError as exc:
+            await websocket.send(encode_error(exc.code, exc.message))
+            return
+
+        session.bind_user(user.id, user.username, user.rating)
+        await websocket.send(
+            encode_auth_ok(user.id, user.username, user.rating)
+        )
+
+    async def _handle_login(self, websocket, message):
+        session = self._sessions.get(websocket)
+        if session is None:
+            await websocket.send(
+                encode_error(INVALID_MESSAGE, "unknown connection")
+            )
+            return
+        if session.is_authenticated:
+            await websocket.send(
+                encode_error(INVALID_MESSAGE, "already authenticated")
+            )
+            return
+
+        payload = message["payload"]
+        try:
+            user = self._auth.login(payload["username"], payload["password"])
+        except AuthError as exc:
+            await websocket.send(encode_error(exc.code, exc.message))
+            return
+
+        session.bind_user(user.id, user.username, user.rating)
+        await websocket.send(
+            encode_auth_ok(user.id, user.username, user.rating)
+        )
+
     async def _handle_identify(self, websocket, message):
         session = self._sessions.get(websocket)
         if session is None:
@@ -120,9 +221,28 @@ class GameServer:
             )
             return
 
+        if not session.is_authenticated:
+            await websocket.send(
+                encode_error(
+                    NOT_AUTHENTICATED,
+                    "login or register before identify",
+                )
+            )
+            return
+
         if session.is_identified:
             await websocket.send(
                 encode_error(INVALID_MESSAGE, "already identified")
+            )
+            return
+
+        username = message["payload"]["username"]
+        if username != session.username:
+            await websocket.send(
+                encode_error(
+                    INVALID_MESSAGE,
+                    "identify username must match authenticated user",
+                )
             )
             return
 
@@ -133,15 +253,16 @@ class GameServer:
             )
             return
 
-        username = message["payload"]["username"]
         async with match.lock:
-            result = match.try_assign_player(session, username)
+            result = match.try_assign_player(session, session.username)
 
         if not result["ok"]:
             await websocket.send(
                 encode_error(result["error_code"], result["error_message"])
             )
             return
+
+        self._maybe_start_rated_game(match)
 
         await websocket.send(
             encode_identity_assigned(
@@ -155,6 +276,67 @@ class GameServer:
                 "state_snapshot",
                 payload=match.snapshot_payload(),
             )
+        )
+
+    def _maybe_start_rated_game(self, match):
+        if match.db_game_id is not None:
+            return
+        if match.player_count() != 2:
+            return
+        white = match.player_for_color("w")
+        black = match.player_for_color("b")
+        if (
+            white is None
+            or black is None
+            or white.user_id is None
+            or black.user_id is None
+        ):
+            return
+        game = self._rating.start_game(white.user_id, black.user_id)
+        match.db_game_id = game.id
+        match.rated = True
+
+    async def _on_match_game_over(self, match):
+        if match._result_recorded:
+            return
+
+        winner = match.detect_winner_color()
+        reason = "king_captured" if winner is not None else "game_over"
+
+        if match.db_game_id is None:
+            match._result_recorded = True
+            await match.broadcast_message(
+                "game_over",
+                payload={
+                    "winner": winner,
+                    "reason": reason,
+                    "rated": False,
+                    "ratings": {},
+                },
+            )
+            return
+
+        result = self._rating.finalize_game(
+            match.db_game_id,
+            winner,
+            rated=match.rated,
+        )
+        match._result_recorded = True
+
+        for color, info in result.get("ratings", {}).items():
+            session = match.player_for_color(color)
+            if session is not None:
+                session.rating = info["rating_after"]
+
+        await match.broadcast_message(
+            "game_over",
+            payload={
+                "winner": result["winner_color"],
+                "reason": reason,
+                "rated": result["rated"],
+                "ratings": result["ratings"],
+                "game_id": result["game_id"],
+            },
         )
 
     async def _handle_move(self, websocket, message):

@@ -1,4 +1,5 @@
 from shared.protocol import (
+    INVALID_CREDENTIALS,
     INVALID_MESSAGE,
     INVALID_USERNAME,
     NOT_AUTHENTICATED,
@@ -7,6 +8,7 @@ from shared.protocol import (
     SERVER_FULL,
     USERNAME_TAKEN,
     decode_message,
+    encode_auth_ok,
     encode_error,
     encode_identity_assigned,
     encode_message,
@@ -14,6 +16,7 @@ from shared.protocol import (
 )
 
 __all__ = [
+    "INVALID_CREDENTIALS",
     "INVALID_MESSAGE",
     "INVALID_USERNAME",
     "NOT_AUTHENTICATED",
@@ -22,6 +25,7 @@ __all__ = [
     "SERVER_FULL",
     "USERNAME_TAKEN",
     "decode_message",
+    "encode_auth_ok",
     "encode_error",
     "encode_identity_assigned",
     "encode_message",

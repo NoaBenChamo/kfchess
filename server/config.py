@@ -1,3 +1,4 @@
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 TICK_MS = 50
+DEFAULT_DB_PATH = "data/kfchess.db"

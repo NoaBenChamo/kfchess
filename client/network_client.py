@@ -39,8 +39,22 @@ class NetworkClient:
         await self.send_message("ping", payload={})
         return await self.receive_until("pong")
 
+    async def register(self, username, password):
+        await self.send_message(
+            "register",
+            payload={"username": username, "password": password},
+        )
+        return await self.receive_until("auth_ok", also_accept_errors=True)
+
+    async def login(self, username, password):
+        await self.send_message(
+            "login",
+            payload={"username": username, "password": password},
+        )
+        return await self.receive_until("auth_ok", also_accept_errors=True)
+
     async def identify(self, username):
-        """Send Stage C identify and wait for identity_assigned or error."""
+        """Send identify and wait for identity_assigned or error."""
         await self.send_message("identify", payload={"username": username})
         return await self.receive_until(
             "identity_assigned",

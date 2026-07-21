@@ -6,15 +6,17 @@ class ProtocolError(ValueError):
     """Raised when a network message cannot be decoded or is invalid."""
 
 
-# Stage C error codes (and shared protocol codes).
+# Stage C/D error codes (and shared protocol codes).
 INVALID_MESSAGE = "INVALID_MESSAGE"
 INVALID_USERNAME = "INVALID_USERNAME"
+INVALID_CREDENTIALS = "INVALID_CREDENTIALS"
 SERVER_FULL = "SERVER_FULL"
 USERNAME_TAKEN = "USERNAME_TAKEN"
 NOT_AUTHENTICATED = "NOT_AUTHENTICATED"
 NOT_YOUR_PIECE = "NOT_YOUR_PIECE"
 
 USERNAME_MAX_LENGTH = 32
+PASSWORD_MIN_LENGTH = 4
 _USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -96,6 +98,8 @@ def decode_message(raw):
         _validate_move_payload(payload)
     elif message_type == "identify":
         payload = _validate_identify_payload(payload)
+    elif message_type in ("register", "login"):
+        payload = _validate_auth_payload(payload)
 
     result = {
         "type": message_type,
@@ -122,6 +126,17 @@ def _validate_identify_payload(payload):
     return {**payload, "username": normalized}
 
 
+def _validate_auth_payload(payload):
+    if "username" not in payload:
+        raise ProtocolError("auth payload requires username")
+    if "password" not in payload:
+        raise ProtocolError("auth payload requires password")
+    if not isinstance(payload["password"], str):
+        raise ProtocolError("password must be a string")
+    normalized = normalize_username(payload["username"])
+    return {**payload, "username": normalized}
+
+
 def encode_error(code, message):
     return encode_message(
         "error",
@@ -141,3 +156,28 @@ def encode_identity_assigned(username, color, game_id="default"):
             "game_id": game_id,
         },
     )
+
+
+def encode_auth_ok(user_id, username, rating):
+    """Encode a Stage D auth_ok response after register or login."""
+    return encode_message(
+        "auth_ok",
+        payload={
+            "user_id": user_id,
+            "username": username,
+            "rating": rating,
+        },
+    )
+
+
+def encode_game_over(winner_color, reason, ratings=None, rated=False, game_id=None):
+    """Encode a Stage D.3 game_over notification with optional rating updates."""
+    payload = {
+        "winner": winner_color,
+        "reason": reason,
+        "rated": bool(rated),
+        "ratings": ratings or {},
+    }
+    if game_id is not None:
+        payload["game_id"] = game_id
+    return encode_message("game_over", payload=payload)

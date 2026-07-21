@@ -26,9 +26,13 @@ class RemoteSession:
     Implements PlaySession for the remote client.
     """
 
-    def __init__(self, uri, username):
+    def __init__(self, uri, username, password, auth_mode="login"):
+        if auth_mode not in ("login", "register"):
+            raise ValueError("auth_mode must be 'login' or 'register'")
         self._uri = uri
         self._username = username
+        self._password = password
+        self._auth_mode = auth_mode
         self._state = ClientState()
         self._outgoing = queue.Queue()
         self._incoming = queue.Queue()
@@ -139,8 +143,11 @@ class RemoteSession:
             async with NetworkClient(self._uri) as client:
                 receiver = asyncio.create_task(self._receive_loop(client))
                 await client.send_message(
-                    "identify",
-                    payload={"username": self._username},
+                    self._auth_mode,
+                    payload={
+                        "username": self._username,
+                        "password": self._password,
+                    },
                 )
                 try:
                     while not self._stopped.is_set():
@@ -173,6 +180,7 @@ class RemoteSession:
             raise
 
     async def _receive_loop(self, client):
+        identify_sent = False
         while not self._stopped.is_set():
             message = await client.receive_message()
             self._incoming.put(message)
@@ -184,8 +192,18 @@ class RemoteSession:
             if message_type == "error":
                 self._startup_error = message.get("payload") or {
                     "code": "ERROR",
-                    "message": "identify failed",
+                    "message": "auth or identify failed",
                 }
                 self._ready.set()
-            elif self._state.ready:
+                continue
+
+            if message_type == "auth_ok" and not identify_sent:
+                identify_sent = True
+                await client.send_message(
+                    "identify",
+                    payload={"username": self._username},
+                )
+                continue
+
+            if self._state.ready:
                 self._ready.set()
