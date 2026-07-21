@@ -39,6 +39,14 @@ class NetworkClient:
         await self.send_message("ping", payload={})
         return await self.receive_until("pong")
 
+    async def identify(self, username):
+        """Send Stage C identify and wait for identity_assigned or error."""
+        await self.send_message("identify", payload={"username": username})
+        return await self.receive_until(
+            "identity_assigned",
+            also_accept_errors=True,
+        )
+
     async def send_move(self, command):
         """Send a course-style move command string (e.g. WQe2e5)."""
         await self.send_message("move", payload={"command": command})

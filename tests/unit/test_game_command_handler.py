@@ -41,3 +41,17 @@ def test_apply_rejects_illegal_move():
 
     assert result["ok"] is False
     assert result["error_code"] == "INVALID_MOVE"
+
+
+def test_apply_rejects_opponent_piece_for_assigned_color():
+    match = Match("default")
+    handler = GameCommandHandler()
+
+    result = handler.apply_move_command(
+        match,
+        "BPe7e5",
+        assigned_color="w",
+    )
+
+    assert result["ok"] is False
+    assert result["error_code"] == "NOT_YOUR_PIECE"

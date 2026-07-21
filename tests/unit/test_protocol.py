@@ -2,9 +2,12 @@ import pytest
 
 from shared.protocol import (
     ProtocolError,
+    USERNAME_MAX_LENGTH,
     decode_message,
     encode_error,
+    encode_identity_assigned,
     encode_message,
+    normalize_username,
 )
 
 
@@ -72,3 +75,63 @@ def test_move_with_non_string_command_is_rejected():
 def test_move_with_non_dict_payload_is_rejected():
     with pytest.raises(ProtocolError, match="payload must be an object"):
         decode_message('{"type": "move", "payload": "WQe2e5"}')
+
+
+def test_identify_encode_decode_roundtrip_normalizes_username():
+    raw = encode_message("identify", payload={"username": "  Noa  "})
+    message = decode_message(raw)
+
+    assert message["type"] == "identify"
+    assert message["payload"]["username"] == "Noa"
+
+
+def test_identify_without_username_is_rejected():
+    with pytest.raises(ProtocolError, match="username"):
+        decode_message('{"type": "identify", "payload": {}}')
+
+
+def test_identify_empty_username_is_rejected():
+    with pytest.raises(ProtocolError, match="non-empty"):
+        decode_message('{"type": "identify", "payload": {"username": "   "}}')
+
+
+def test_identify_non_string_username_is_rejected():
+    with pytest.raises(ProtocolError, match="username must be a string"):
+        decode_message('{"type": "identify", "payload": {"username": 123}}')
+
+
+def test_identify_rejects_invalid_characters():
+    with pytest.raises(ProtocolError, match="letters"):
+        decode_message(
+            '{"type": "identify", "payload": {"username": "bad name!"}}'
+        )
+
+
+def test_identify_rejects_too_long_username():
+    too_long = "a" * (USERNAME_MAX_LENGTH + 1)
+    with pytest.raises(ProtocolError, match="at most"):
+        decode_message(
+            f'{{"type": "identify", "payload": {{"username": "{too_long}"}}}}'
+        )
+
+
+def test_normalize_username_accepts_valid_names():
+    assert normalize_username("Alice_1") == "Alice_1"
+    assert normalize_username("bob-2") == "bob-2"
+
+
+def test_encode_identity_assigned_shape():
+    message = decode_message(
+        encode_identity_assigned("Noa", "w", game_id="default")
+    )
+    assert message["type"] == "identity_assigned"
+    assert message["payload"] == {
+        "username": "Noa",
+        "color": "w",
+        "game_id": "default",
+    }
+
+
+def test_encode_identity_assigned_rejects_invalid_color():
+    with pytest.raises(ProtocolError, match="color"):
+        encode_identity_assigned("Noa", "x")

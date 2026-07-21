@@ -5,14 +5,18 @@ from board_io.board_parser import BoardParser
 from engine.game_engine import GameEngine
 from server.opening_board import STANDARD_OPENING
 from server.snapshot_serializer import snapshot_to_dict
-from shared.protocol import encode_message
+from shared.protocol import SERVER_FULL, USERNAME_TAKEN, encode_message
 
 logger = logging.getLogger(__name__)
+
+_PLAYER_COLORS = ("w", "b")
 
 
 class Match:
     """
     One authoritative networked game: owns GameEngine, sequence, and tick loop.
+
+    Stage C also owns player seats (White / Black) via ClientSession.
     """
 
     def __init__(self, game_id, engine=None):
@@ -25,6 +29,8 @@ class Match:
         self.sequence = 0
         self.lock = asyncio.Lock()
         self._connections = set()
+        self._players = {}  # color -> ClientSession
+        self._sessions_by_ws = {}  # websocket -> ClientSession
         self._closed = False
         self._tick_task = None
         self._last_state_key = self._state_key()
@@ -38,6 +44,65 @@ class Match:
 
     def remove_connection(self, websocket):
         self._connections.discard(websocket)
+
+    def session_for(self, websocket):
+        return self._sessions_by_ws.get(websocket)
+
+    def player_count(self):
+        return len(self._players)
+
+    def is_full(self):
+        return len(self._players) >= len(_PLAYER_COLORS)
+
+    def is_username_taken(self, username):
+        target = username.casefold()
+        return any(
+            session.username is not None
+            and session.username.casefold() == target
+            for session in self._players.values()
+        )
+
+    def try_assign_player(self, session, username):
+        """
+        Seat an identified player as White then Black.
+
+        Returns:
+            {"ok": True, "color": "w"|"b"} on success, or
+            {"ok": False, "error_code": SERVER_FULL|USERNAME_TAKEN, "error_message": ...}
+        """
+        if self.is_username_taken(username):
+            return {
+                "ok": False,
+                "error_code": USERNAME_TAKEN,
+                "error_message": "username already seated in this match",
+            }
+
+        if self.is_full():
+            return {
+                "ok": False,
+                "error_code": SERVER_FULL,
+                "error_message": "match already has two players",
+            }
+
+        color = next(c for c in _PLAYER_COLORS if c not in self._players)
+        session.bind_player(username, color, self.game_id)
+        self._players[color] = session
+        self._sessions_by_ws[session.websocket] = session
+        self.add_connection(session.websocket)
+        return {"ok": True, "color": color}
+
+    def release(self, websocket):
+        """
+        Remove a connection and free its player seat if any.
+        Safe to call when the websocket was never seated.
+        """
+        session = self._sessions_by_ws.pop(websocket, None)
+        if session is not None and session.assigned_color in self._players:
+            if self._players.get(session.assigned_color) is session:
+                del self._players[session.assigned_color]
+            session.clear_identity()
+        self.remove_connection(websocket)
+        return session
 
     async def start_tick_loop(self, tick_ms):
         if self._tick_task is not None:

@@ -10,6 +10,15 @@ from shared.squares import position_to_square
 from snapshots.game_snapshot import GameSnapshot
 
 
+class IdentifyError(RuntimeError):
+    """Raised when the server rejects identify during RemoteSession.start()."""
+
+    def __init__(self, code, message):
+        self.code = code
+        self.message = message
+        super().__init__(f"{code}: {message}")
+
+
 class RemoteSession:
     """
     Bridges the sync OpenCV loop and the async WebSocket client.
@@ -17,14 +26,16 @@ class RemoteSession:
     Implements PlaySession for the remote client.
     """
 
-    def __init__(self, uri):
+    def __init__(self, uri, username):
         self._uri = uri
+        self._username = username
         self._state = ClientState()
         self._outgoing = queue.Queue()
         self._incoming = queue.Queue()
         self._thread = None
         self._ready = threading.Event()
         self._stopped = threading.Event()
+        self._startup_error = None
 
     @property
     def state(self):
@@ -41,7 +52,13 @@ class RemoteSession:
         )
         self._thread.start()
         if not self._ready.wait(timeout=5.0):
-            raise TimeoutError("timed out waiting for server snapshot")
+            self.stop()
+            raise TimeoutError("timed out waiting for identity and snapshot")
+        if self._startup_error is not None:
+            self.stop()
+            code = self._startup_error.get("code", "ERROR")
+            message = self._startup_error.get("message", "identify failed")
+            raise IdentifyError(code, message)
 
     def stop(self):
         self._stopped.set()
@@ -67,7 +84,12 @@ class RemoteSession:
         return self._state.selected
 
     def select(self, position: Position) -> None:
-        if piece_at(self._state.snapshot_dict, position) is None:
+        piece = piece_at(self._state.snapshot_dict, position)
+        if piece is None:
+            return
+        color, _piece_type = piece
+        assigned = self._state.assigned_color
+        if assigned is not None and color.lower() != assigned.lower():
             return
         self._state.select(position)
 
@@ -85,6 +107,11 @@ class RemoteSession:
             return
 
         color, piece_type = piece
+        assigned = self._state.assigned_color
+        if assigned is not None and color.lower() != assigned.lower():
+            self._state.clear_selection()
+            return
+
         command = (
             f"{color.upper()}{piece_type}"
             f"{position_to_square(selected)}"
@@ -108,37 +135,57 @@ class RemoteSession:
         asyncio.run(self._async_main())
 
     async def _async_main(self):
-        async with NetworkClient(self._uri) as client:
-            receiver = asyncio.create_task(self._receive_loop(client))
-            try:
-                while not self._stopped.is_set():
-                    try:
-                        item = self._outgoing.get_nowait()
-                    except queue.Empty:
-                        await asyncio.sleep(0.01)
-                        continue
-                    if item is None:
-                        break
-                    kind, command = item
-                    if kind == "move":
-                        await client.send_message(
-                            "move",
-                            payload={"command": command},
-                        )
-            finally:
-                receiver.cancel()
+        try:
+            async with NetworkClient(self._uri) as client:
+                receiver = asyncio.create_task(self._receive_loop(client))
+                await client.send_message(
+                    "identify",
+                    payload={"username": self._username},
+                )
                 try:
-                    await receiver
-                except asyncio.CancelledError:
-                    pass
+                    while not self._stopped.is_set():
+                        try:
+                            item = self._outgoing.get_nowait()
+                        except queue.Empty:
+                            await asyncio.sleep(0.01)
+                            continue
+                        if item is None:
+                            break
+                        kind, command = item
+                        if kind == "move":
+                            await client.send_message(
+                                "move",
+                                payload={"command": command},
+                            )
+                finally:
+                    receiver.cancel()
+                    try:
+                        await receiver
+                    except asyncio.CancelledError:
+                        pass
+        except Exception as exc:
+            if not self._ready.is_set():
+                self._startup_error = {
+                    "code": "CONNECTION_ERROR",
+                    "message": str(exc),
+                }
+                self._ready.set()
+            raise
 
     async def _receive_loop(self, client):
         while not self._stopped.is_set():
             message = await client.receive_message()
             self._incoming.put(message)
-            if (
-                message.get("type") == "state_snapshot"
-                and not self._ready.is_set()
-            ):
-                self._state.handle_message(message)
+            if self._ready.is_set():
+                continue
+
+            self._state.handle_message(message)
+            message_type = message.get("type")
+            if message_type == "error":
+                self._startup_error = message.get("payload") or {
+                    "code": "ERROR",
+                    "message": "identify failed",
+                }
+                self._ready.set()
+            elif self._state.ready:
                 self._ready.set()

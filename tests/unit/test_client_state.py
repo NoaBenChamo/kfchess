@@ -61,3 +61,25 @@ def test_piece_at_finds_piece():
     data = _sample_snapshot()
     assert piece_at(data, Position(6, 4)) == ("w", "P")
     assert piece_at(data, Position(0, 0)) is None
+
+
+def test_client_state_identity_assigned_stores_color():
+    state = ClientState()
+    state.handle_message({
+        "type": "identity_assigned",
+        "payload": {
+            "username": "Noa",
+            "color": "b",
+            "game_id": "default",
+        },
+    })
+
+    assert state.username == "Noa"
+    assert state.assigned_color == "b"
+    assert state.ready is False
+
+    state.handle_message({
+        "type": "state_snapshot",
+        "payload": _sample_snapshot(),
+    })
+    assert state.ready is True

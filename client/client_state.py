@@ -11,10 +11,12 @@ class ClientState:
         self.selected = None
         self.sequence = -1
         self.last_error = None
+        self.username = None
+        self.assigned_color = None
 
     @property
     def ready(self):
-        return self._snapshot_dict is not None
+        return self._snapshot_dict is not None and self.assigned_color is not None
 
     @property
     def game_over(self):
@@ -25,6 +27,12 @@ class ClientState:
     def handle_message(self, message):
         message_type = message.get("type")
         payload = message.get("payload") or {}
+
+        if message_type == "identity_assigned":
+            self.username = payload.get("username")
+            self.assigned_color = payload.get("color")
+            self.last_error = None
+            return
 
         if message_type == "state_snapshot":
             self._apply_snapshot(payload)

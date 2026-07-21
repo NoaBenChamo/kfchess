@@ -13,6 +13,12 @@ async def run_demo(host=DEFAULT_HOST, port=DEFAULT_PORT):
         if pong.get("type") != "pong":
             raise SystemExit(1)
 
+        identity = await client.identify("DemoPlayer")
+        print("identify:", identity)
+        if identity.get("type") != "identity_assigned":
+            raise SystemExit(1)
+        await client.receive_until("state_snapshot")
+
         # White pawn e2 -> e4 on the standard opening board.
         move_response = await client.send_move("WPe2e4")
         print("move:", move_response)

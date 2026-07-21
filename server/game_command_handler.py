@@ -1,4 +1,5 @@
 from shared.move_command import InvalidMoveCommand, parse_move_command
+from shared.protocol import NOT_YOUR_PIECE
 from shared.squares import square_to_position
 from server.snapshot_serializer import snapshot_to_dict
 
@@ -8,7 +9,7 @@ class GameCommandHandler:
     Applies parsed network commands to a Match's GameEngine.
     """
 
-    def apply_move_command(self, match, command_text):
+    def apply_move_command(self, match, command_text, assigned_color=None):
         try:
             command = parse_move_command(command_text)
         except InvalidMoveCommand as exc:
@@ -18,14 +19,21 @@ class GameCommandHandler:
                 "error_message": str(exc),
             }
 
+        expected_color = command.piece_code[0].lower()
+        expected_kind = command.piece_code[1]
+
+        if assigned_color is not None and expected_color != assigned_color:
+            return {
+                "ok": False,
+                "error_code": NOT_YOUR_PIECE,
+                "error_message": "cannot move opponent pieces",
+            }
+
         source = square_to_position(command.source)
         target = square_to_position(command.target)
         engine = match.engine
         board = engine.get_board()
         piece = board.get(source)
-
-        expected_color = command.piece_code[0].lower()
-        expected_kind = command.piece_code[1]
 
         if piece is None:
             return {
