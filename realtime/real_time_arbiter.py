@@ -262,6 +262,12 @@ class RealTimeArbiter:
     def get_winner_color(self):
         return self._winner_color
 
+    def declare_winner(self, color):
+        """Set winner explicitly (e.g. resign). color is 'w' or 'b'."""
+        if color not in ("w", "b"):
+            raise ValueError("color must be 'w' or 'b'")
+        self._winner_color = color
+
     def _declare_winner_by_captured_king(self, captured_piece):
         if captured_piece.color.lower() == "w":
             self._winner_color = "b"

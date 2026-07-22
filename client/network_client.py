@@ -61,6 +61,33 @@ class NetworkClient:
             also_accept_errors=True,
         )
 
+    async def play_request(self):
+        """Join the matchmaking queue; returns request_ok, match_found, or error."""
+        await self.send_message("play_request", payload={})
+        return await self.receive_until(
+            "match_found",
+            also_accept_errors=True,
+            also_accept=("request_ok", "matchmaking_timeout"),
+        )
+
+    async def cancel_matchmaking(self):
+        await self.send_message("cancel_matchmaking", payload={})
+        return await self.receive_until("request_ok", also_accept_errors=True)
+
+    async def create_room(self):
+        await self.send_message("create_room", payload={})
+        return await self.receive_until(
+            "room_update",
+            also_accept_errors=True,
+        )
+
+    async def join_room(self, room_id):
+        await self.send_message("join_room", payload={"room_id": room_id})
+        return await self.receive_until(
+            "room_update",
+            also_accept_errors=True,
+        )
+
     async def send_move(self, command):
         """Send a course-style move command string (e.g. WQe2e5)."""
         await self.send_message("move", payload={"command": command})
@@ -71,11 +98,13 @@ class NetworkClient:
         message_type,
         timeout=2.0,
         also_accept_errors=False,
+        also_accept=(),
     ):
         """
         Read messages until one of the expected type arrives.
         Skips unrelated traffic such as state_snapshot broadcasts.
         """
+        accepted = {message_type, *also_accept}
         deadline = asyncio.get_running_loop().time() + timeout
         while True:
             remaining = deadline - asyncio.get_running_loop().time()
@@ -85,7 +114,7 @@ class NetworkClient:
                 self.receive_message(),
                 timeout=remaining,
             )
-            if message["type"] == message_type:
+            if message["type"] in accepted:
                 return message
             if also_accept_errors and message["type"] == "error":
                 return message

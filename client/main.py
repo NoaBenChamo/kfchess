@@ -20,6 +20,7 @@ async def run_demo(host=DEFAULT_HOST, port=DEFAULT_PORT):
         if auth.get("type") != "auth_ok":
             raise SystemExit(1)
 
+        # Need a second client for matchmaking — use identify legacy for solo demo.
         identity = await client.identify("DemoPlayer")
         print("identify:", identity)
         if identity.get("type") != "identity_assigned":

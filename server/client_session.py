@@ -11,7 +11,7 @@ def _next_connection_id():
 
 class ClientSession:
     """
-    Per-connection identity for a networked client (Stage C/D).
+    Per-connection identity for a networked client (Stage C/E).
 
     Distinct from PlaySession — this is server-side connection membership,
     not the UI play port.
@@ -26,6 +26,7 @@ class ClientSession:
         self.assigned_color = None
         self.game_id = None
         self.role = None
+        self.disconnected = False
 
     @property
     def is_authenticated(self):
@@ -45,12 +46,21 @@ class ClientSession:
         self.assigned_color = color
         self.game_id = game_id
         self.role = "player"
+        self.disconnected = False
+
+    def bind_spectator(self, username, game_id):
+        self.username = username
+        self.assigned_color = None
+        self.game_id = game_id
+        self.role = "spectator"
+        self.disconnected = False
 
     def clear_seat(self):
-        """Release match seat without clearing authentication."""
+        """Release match seat / spectator slot without clearing authentication."""
         self.assigned_color = None
         self.game_id = None
         self.role = None
+        self.disconnected = False
 
     def clear_identity(self):
         """Backward-compatible alias: clear seat only (keep auth)."""

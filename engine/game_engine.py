@@ -156,6 +156,20 @@ class GameEngine:
     def get_selected(self):
         return self._selected
 
+    def resign(self, color):
+        """
+        Technical loss for the given color. Opponent wins.
+        Returns True if the game ended because of this call.
+        """
+        if self._game_over:
+            return False
+        if color not in ("w", "b"):
+            raise ValueError("color must be 'w' or 'b'")
+        winner = "b" if color == "w" else "w"
+        self._arbiter.declare_winner(winner)
+        self._apply_game_over()
+        return True
+
     def set_game_over(self):
         self._apply_game_over()
 

@@ -15,10 +15,18 @@ class ClientState:
         self.username = None
         self.rating = None
         self.assigned_color = None
+        self.game_id = None
+        self.room_id = None
+        self.role = None
+        self.disconnect_notice = None
 
     @property
     def ready(self):
-        return self._snapshot_dict is not None and self.assigned_color is not None
+        if self._snapshot_dict is None:
+            return False
+        if self.role == "spectator":
+            return True
+        return self.assigned_color is not None
 
     @property
     def game_over(self):
@@ -37,6 +45,35 @@ class ClientState:
             self.last_error = None
             return
 
+        if message_type == "match_found":
+            self.assigned_color = payload.get("color")
+            self.game_id = payload.get("game_id")
+            self.role = "player"
+            self.disconnect_notice = None
+            self.last_error = None
+            return
+
+        if message_type == "room_update":
+            self.room_id = payload.get("room_id")
+            self.game_id = payload.get("game_id") or self.game_id
+            if payload.get("role") is not None:
+                self.role = payload.get("role")
+            if payload.get("color") is not None:
+                self.assigned_color = payload.get("color")
+            self.last_error = None
+            return
+
+        if message_type == "player_disconnected":
+            self.disconnect_notice = {
+                "color": payload.get("color"),
+                "grace_period_ms": payload.get("grace_period_ms"),
+            }
+            return
+
+        if message_type == "player_reconnected":
+            self.disconnect_notice = None
+            return
+
         if message_type == "game_over":
             ratings = payload.get("ratings") or {}
             assigned = self.assigned_color
@@ -48,6 +85,8 @@ class ClientState:
         if message_type == "identity_assigned":
             self.username = payload.get("username")
             self.assigned_color = payload.get("color")
+            self.game_id = payload.get("game_id")
+            self.role = "player"
             self.last_error = None
             return
 

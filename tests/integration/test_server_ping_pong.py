@@ -19,8 +19,17 @@ from shared.protocol import (
 from shared.squares import square_to_position
 
 
-async def _start_server(start_ticks=False, tick_ms=20, database=None):
-    game_server = GameServer(tick_ms=tick_ms, database=database)
+async def _start_server(
+    start_ticks=False,
+    tick_ms=20,
+    database=None,
+    disconnect_grace_ms=50,
+):
+    game_server = GameServer(
+        tick_ms=tick_ms,
+        database=database,
+        disconnect_grace_ms=disconnect_grace_ms,
+    )
     if start_ticks:
         await game_server.start()
     server = await serve(game_server.handler, "127.0.0.1", 0)
@@ -320,7 +329,7 @@ async def test_black_cannot_move_white_piece():
 
 @pytest.mark.asyncio
 async def test_disconnect_frees_seat_for_next_player():
-    game_server, server, port = await _start_server()
+    game_server, server, port = await _start_server(disconnect_grace_ms=50)
     uri = f"ws://127.0.0.1:{port}"
     try:
         async with NetworkClient(uri) as client_a:
@@ -328,7 +337,8 @@ async def test_disconnect_frees_seat_for_next_player():
             async with NetworkClient(uri) as client_b:
                 await _register_and_identify(client_b, "Bob")
 
-        await asyncio.sleep(0.05)
+        # Grace expires → auto-resign → seats cleared.
+        await asyncio.sleep(0.25)
         match = game_server.registry.get("default")
         assert match.player_count() == 0
 

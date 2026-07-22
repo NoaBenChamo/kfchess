@@ -76,10 +76,34 @@ def test_client_state_identity_assigned_stores_color():
 
     assert state.username == "Noa"
     assert state.assigned_color == "b"
+    assert state.role == "player"
     assert state.ready is False
 
     state.handle_message({
         "type": "state_snapshot",
         "payload": _sample_snapshot(),
     })
+    assert state.ready is True
+
+
+def test_client_state_spectator_ready_without_color():
+    state = ClientState()
+    state.handle_message({
+        "type": "room_update",
+        "payload": {
+            "room_id": "AB12CD",
+            "game_id": "g1",
+            "players": {},
+            "spectators": [{"username": "Carol"}],
+            "status": "playing",
+            "role": "spectator",
+        },
+    })
+    state.handle_message({
+        "type": "state_snapshot",
+        "payload": _sample_snapshot(1),
+    })
+    assert state.role == "spectator"
+    assert state.assigned_color is None
+    assert state.room_id == "AB12CD"
     assert state.ready is True

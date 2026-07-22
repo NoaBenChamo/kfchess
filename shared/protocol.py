@@ -6,7 +6,7 @@ class ProtocolError(ValueError):
     """Raised when a network message cannot be decoded or is invalid."""
 
 
-# Stage C/D error codes (and shared protocol codes).
+# Stage C/D/F error codes (and shared protocol codes).
 INVALID_MESSAGE = "INVALID_MESSAGE"
 INVALID_USERNAME = "INVALID_USERNAME"
 INVALID_CREDENTIALS = "INVALID_CREDENTIALS"
@@ -14,6 +14,10 @@ SERVER_FULL = "SERVER_FULL"
 USERNAME_TAKEN = "USERNAME_TAKEN"
 NOT_AUTHENTICATED = "NOT_AUTHENTICATED"
 NOT_YOUR_PIECE = "NOT_YOUR_PIECE"
+NOT_IN_GAME = "NOT_IN_GAME"
+MATCHMAKING_TIMEOUT = "MATCHMAKING_TIMEOUT"
+ROOM_NOT_FOUND = "ROOM_NOT_FOUND"
+SPECTATOR_READ_ONLY = "SPECTATOR_READ_ONLY"
 
 USERNAME_MAX_LENGTH = 32
 PASSWORD_MIN_LENGTH = 4
@@ -100,6 +104,8 @@ def decode_message(raw):
         payload = _validate_identify_payload(payload)
     elif message_type in ("register", "login"):
         payload = _validate_auth_payload(payload)
+    elif message_type == "join_room":
+        payload = _validate_join_room_payload(payload)
 
     result = {
         "type": message_type,
@@ -181,3 +187,78 @@ def encode_game_over(winner_color, reason, ratings=None, rated=False, game_id=No
     if game_id is not None:
         payload["game_id"] = game_id
     return encode_message("game_over", payload=payload)
+
+
+def encode_match_found(game_id, color, opponent_username, opponent_rating):
+    """Encode Stage E match_found after successful matchmaking."""
+    if color not in ("w", "b"):
+        raise ProtocolError("color must be 'w' or 'b'")
+    return encode_message(
+        "match_found",
+        payload={
+            "game_id": game_id,
+            "color": color,
+            "opponent": {
+                "username": opponent_username,
+                "rating": opponent_rating,
+            },
+        },
+        game_id=game_id,
+    )
+
+
+def encode_matchmaking_timeout():
+    return encode_message("matchmaking_timeout", payload={})
+
+
+def encode_player_disconnected(color, grace_period_ms):
+    return encode_message(
+        "player_disconnected",
+        payload={
+            "color": color,
+            "grace_period_ms": grace_period_ms,
+        },
+    )
+
+
+def encode_player_reconnected(color):
+    return encode_message(
+        "player_reconnected",
+        payload={"color": color},
+    )
+
+
+def encode_room_update(
+    room_id,
+    game_id,
+    players,
+    spectators,
+    status,
+    role=None,
+    color=None,
+):
+    """Encode Stage F room_update (membership + optional self role/color)."""
+    payload = {
+        "room_id": room_id,
+        "game_id": game_id,
+        "players": players,
+        "spectators": spectators,
+        "status": status,
+    }
+    if role is not None:
+        payload["role"] = role
+    if color is not None:
+        payload["color"] = color
+    return encode_message("room_update", payload=payload, game_id=game_id)
+
+
+def _validate_join_room_payload(payload):
+    if "room_id" not in payload:
+        raise ProtocolError("join_room payload requires room_id")
+    room_id = payload["room_id"]
+    if not isinstance(room_id, str):
+        raise ProtocolError("room_id must be a string")
+    normalized = room_id.strip().upper()
+    if not normalized:
+        raise ProtocolError("room_id must be non-empty")
+    return {**payload, "room_id": normalized}
