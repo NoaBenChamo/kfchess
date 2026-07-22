@@ -100,6 +100,8 @@ def decode_message(raw):
 
     if message_type == "move":
         _validate_move_payload(payload)
+    elif message_type == "jump_request":
+        payload = _validate_jump_payload(payload)
     elif message_type == "identify":
         payload = _validate_identify_payload(payload)
     elif message_type in ("register", "login"):
@@ -123,6 +125,17 @@ def _validate_move_payload(payload):
         raise ProtocolError("move payload requires command")
     if not isinstance(payload["command"], str):
         raise ProtocolError("move command must be a string")
+
+
+def _validate_jump_payload(payload):
+    for key in ("row", "col"):
+        if key not in payload:
+            raise ProtocolError(f"jump_request payload requires {key}")
+        if not isinstance(payload[key], int):
+            raise ProtocolError(f"jump_request {key} must be an integer")
+        if payload[key] < 0 or payload[key] > 7:
+            raise ProtocolError(f"jump_request {key} out of range")
+    return payload
 
 
 def _validate_identify_payload(payload):

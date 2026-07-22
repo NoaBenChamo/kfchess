@@ -64,16 +64,33 @@ class GameRunner:
         - opening and closing the OpenCV window
 
     GameRunner does not contain game rules, networking, or drawing logic.
+    When the loop ends (Exit Game, game over acknowledge, or connection lost),
+    the caller (remote_ui) returns to the startup/lobby screen.
     """
 
-    def __init__(self, session, controller, renderer, window_name=None, frame_clock=None):
+    def __init__(
+        self,
+        session,
+        controller,
+        renderer,
+        window_name=None,
+        frame_clock=None,
+        exit_button_rect=None,
+    ):
         self._session = session
         self._renderer = renderer
         self._input_handler = InputHandler(controller)
         self._frame_clock = frame_clock or FrameClock()
         self._window_name = window_name or WINDOW_NAME
+        self._exit_button_rect = exit_button_rect
 
         self._running = False
+        self._return_to_lobby = False
+
+    @property
+    def return_to_lobby(self):
+        """True when the runner ended in a way that should reopen StartupWindow."""
+        return self._return_to_lobby
 
     def run(self):
         """
@@ -81,6 +98,7 @@ class GameRunner:
         """
         self._create_window()
         self._running = True
+        self._return_to_lobby = False
 
         try:
             self._run_loop()
@@ -101,12 +119,25 @@ class GameRunner:
             key = cv2.waitKey(TICK_MS)
 
             if not self._input_handler.handle(key):
+                self._leave_and_return_to_lobby()
+                continue
+
+            if getattr(self._session, "connection_lost", False):
+                self._return_to_lobby = True
                 self._running = False
                 continue
 
             if snapshot.game_over:
                 self._wait_for_exit()
+                self._return_to_lobby = True
                 self._running = False
+
+    def _leave_and_return_to_lobby(self):
+        leave = getattr(self._session, "request_leave", None)
+        if callable(leave):
+            leave()
+        self._return_to_lobby = True
+        self._running = False
 
     def _create_window(self):
         work_width, work_height = get_work_area()
@@ -128,16 +159,38 @@ class GameRunner:
 
     def _wait_for_exit(self):
         """
-        Keeps the final game-over frame visible until a key is pressed.
+        Keeps the final game-over frame visible until a key is pressed
+        or the Exit Game button is clicked.
         """
-        cv2.waitKey(0)
+        while True:
+            key = cv2.waitKey(50)
+            if key != -1:
+                return
+            # Allow Exit Game during the acknowledge pause.
+            # Mouse clicks are handled via the callback setting a flag.
+            if getattr(self, "_exit_clicked_during_wait", False):
+                self._exit_clicked_during_wait = False
+                return
 
     def _on_mouse(self, event, x, y, flags, param):
         """
-        Forwards OpenCV mouse events to InputHandler.
+        Forwards OpenCV mouse events to InputHandler, except Exit Game.
         """
+        if event == cv2.EVENT_LBUTTONDOWN and self._hit_exit(x, y):
+            if self._session.game_over:
+                self._exit_clicked_during_wait = True
+                return
+            self._leave_and_return_to_lobby()
+            return
+
         self._input_handler.handle_mouse(
             x,
             y,
             event,
         )
+
+    def _hit_exit(self, x, y):
+        rect = self._exit_button_rect
+        if rect is None:
+            return False
+        return rect.contains(x, y)

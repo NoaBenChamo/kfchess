@@ -3,6 +3,7 @@ import logging
 
 from board_io.board_parser import BoardParser
 from engine.game_engine import GameEngine
+from server.clock import SystemClock
 from server.opening_board import STANDARD_OPENING
 from server.snapshot_serializer import snapshot_to_dict
 from shared.protocol import INVALID_MESSAGE, SERVER_FULL, USERNAME_TAKEN, encode_message
@@ -19,7 +20,7 @@ class Match:
     Stage C also owns player seats (White / Black) via ClientSession.
     """
 
-    def __init__(self, game_id, engine=None):
+    def __init__(self, game_id, engine=None, clock=None):
         self.game_id = game_id
         if engine is None:
             board = BoardParser.parse(STANDARD_OPENING.strip().splitlines())
@@ -39,16 +40,26 @@ class Match:
         self.rated = False
         self._result_recorded = False
         self._game_over_handler = None
-        self._grace_tasks = {}
-        self._grace_ms = 20_000
+        self._grace_expire_handler = None
+        self._grace_deadlines = {}  # color -> deadline_ms
+        self._grace_ms = 60_000
+        self._clock = clock if clock is not None else SystemClock()
         self.room_id = None
+        self.disconnect_forfeit = False
 
     def set_grace_ms(self, grace_ms):
         self._grace_ms = grace_ms
 
+    def set_clock(self, clock):
+        self._clock = clock
+
     def set_game_over_handler(self, handler):
         """Optional async callback: await handler(match) once when game ends."""
         self._game_over_handler = handler
+
+    def set_grace_expire_handler(self, handler):
+        """Optional async callback: await handler(match, color) when grace expires."""
+        self._grace_expire_handler = handler
 
     def player_for_color(self, color):
         return self._players.get(color)
@@ -174,7 +185,10 @@ class Match:
         for color in _PLAYER_COLORS:
             seated = self._players.get(color)
             if seated is not None and seated.username:
-                players[color] = {"username": seated.username}
+                players[color] = {
+                    "username": seated.username,
+                    "rating": seated.rating,
+                }
         spectators = [
             {"username": session.username}
             for session in self._spectators.values()
@@ -233,26 +247,30 @@ class Match:
         return session.assigned_color
 
     def cancel_grace(self, color):
-        task = self._grace_tasks.pop(color, None)
-        if task is not None and not task.done():
-            task.cancel()
+        self._grace_deadlines.pop(color, None)
 
-    async def begin_disconnect_grace(self, color, on_expire, grace_ms=None):
-        """Start (or restart) one grace timer per disconnected color."""
-        self.cancel_grace(color)
+    def begin_disconnect_grace(self, color, on_expire=None, grace_ms=None):
+        """
+        Start (or restart) one grace deadline per disconnected color.
+
+        Expiry is driven by Match.clock via the tick loop (FakeClock-friendly).
+        """
+        if on_expire is not None:
+            self._grace_expire_handler = on_expire
         delay_ms = self._grace_ms if grace_ms is None else grace_ms
+        self._grace_deadlines[color] = self._clock.now_ms() + delay_ms
 
-        async def _runner():
-            try:
-                await asyncio.sleep(delay_ms / 1000.0)
-            except asyncio.CancelledError:
-                return
-            await on_expire(self, color)
-
-        self._grace_tasks[color] = asyncio.create_task(
-            _runner(),
-            name=f"grace-{self.game_id}-{color}",
-        )
+    def pop_expired_graces(self):
+        """Return colors whose reconnect grace has expired (removes deadlines)."""
+        now = self._clock.now_ms()
+        expired = [
+            color
+            for color, deadline in self._grace_deadlines.items()
+            if now >= deadline
+        ]
+        for color in expired:
+            self._grace_deadlines.pop(color, None)
+        return expired
 
     def reconnect_user(self, new_session, user_id):
         """
@@ -277,7 +295,7 @@ class Match:
         return None
 
     def clear_seats(self):
-        for color in list(self._grace_tasks):
+        for color in list(self._grace_deadlines):
             self.cancel_grace(color)
         for session in list(self._players.values()):
             session.clear_seat()
@@ -299,7 +317,7 @@ class Match:
 
     async def stop(self):
         self._closed = True
-        for color in list(self._grace_tasks):
+        for color in list(self._grace_deadlines):
             self.cancel_grace(color)
         task = self._tick_task
         self._tick_task = None
@@ -321,14 +339,22 @@ class Match:
             while not self._closed:
                 await asyncio.sleep(interval)
                 just_ended = False
+                expired_colors = []
                 async with self.lock:
                     was_over = self.engine.is_game_over()
                     changed = self.advance_time(tick_ms)
                     just_ended = self.engine.is_game_over() and not was_over
                     if changed:
                         await self.broadcast_snapshot()
+                    if not just_ended:
+                        expired_colors = self.pop_expired_graces()
                 if just_ended and self._game_over_handler is not None:
                     await self._game_over_handler(self)
+                    continue
+                for color in expired_colors:
+                    handler = self._grace_expire_handler
+                    if handler is not None:
+                        await handler(self, color)
         except asyncio.CancelledError:
             raise
 

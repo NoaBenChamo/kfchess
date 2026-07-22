@@ -328,8 +328,41 @@ async def test_black_cannot_move_white_piece():
 
 
 @pytest.mark.asyncio
+async def test_white_jump_in_place_broadcasts_jump_state():
+    game_server, server, port = await _start_server()
+    uri = f"ws://127.0.0.1:{port}"
+    try:
+        async with NetworkClient(uri) as white, NetworkClient(uri) as black:
+            await _register_and_identify(white, "Alice")
+            await _register_and_identify(black, "Bob")
+
+            # e2 pawn is at row=6, col=4
+            response = await white.send_jump(6, 4)
+            assert response["type"] == "jump_accepted"
+            assert any(
+                piece["row"] == 6
+                and piece["col"] == 4
+                and piece["state"] == "jump"
+                and piece["color"] == "w"
+                for piece in response["payload"]["snapshot"]["pieces"]
+            )
+
+            broadcast = await black.receive_until("state_snapshot")
+            assert any(
+                piece["row"] == 6
+                and piece["col"] == 4
+                and piece["state"] == "jump"
+                for piece in broadcast["payload"]["pieces"]
+            )
+    finally:
+        await _stop_server(game_server, server)
+
+
+@pytest.mark.asyncio
 async def test_disconnect_frees_seat_for_next_player():
-    game_server, server, port = await _start_server(disconnect_grace_ms=50)
+    game_server, server, port = await _start_server(
+        start_ticks=True, disconnect_grace_ms=50
+    )
     uri = f"ws://127.0.0.1:{port}"
     try:
         async with NetworkClient(uri) as client_a:

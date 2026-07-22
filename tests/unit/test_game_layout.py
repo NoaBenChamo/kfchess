@@ -31,3 +31,10 @@ def test_game_layout_uses_screen_rects_for_screen_regions():
     assert layout.right_player_rect.width == PLAYER_WIDTH
     assert layout.board_canvas_rect.x == PLAYER_WIDTH
     assert layout.board_canvas_rect.y == HEADER_HEIGHT
+
+    assert isinstance(layout.exit_button_rect, ScreenRect)
+    assert layout.exit_button_rect.right <= 1280
+    assert layout.header_rect.contains(
+        layout.exit_button_rect.x + 1,
+        layout.exit_button_rect.y + 1,
+    )

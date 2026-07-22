@@ -21,6 +21,7 @@ from view.rendering.window_renderer import WindowRenderer
 class UiBundle:
     renderer: WindowRenderer
     board_mapper: BoardMapper
+    layout: GameLayout
 
 
 def create_ui(window_width, window_height) -> UiBundle:
@@ -60,4 +61,5 @@ def create_ui(window_width, window_height) -> UiBundle:
     return UiBundle(
         renderer=renderer,
         board_mapper=board_mapper,
+        layout=layout,
     )

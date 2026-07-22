@@ -129,3 +129,54 @@ def test_remote_session_game_over_reflects_snapshot():
     })
 
     assert session.game_over
+
+
+def test_remote_session_ready_and_error_properties():
+    session = RemoteSession("ws://unused", username="Alice", password="secret")
+    assert not session.ready
+    assert session.error is None
+
+    session._startup_error = {"code": "INVALID_CREDENTIALS", "message": "bad password"}
+    session._ready.set()
+    assert not session.ready
+    assert session.error["code"] == "INVALID_CREDENTIALS"
+
+    session._startup_error = None
+    session.state.handle_message({
+        "type": "match_found",
+        "payload": {"color": "w", "game_id": "g1"},
+    })
+    session.state.handle_message({
+        "type": "state_snapshot",
+        "payload": _sample_snapshot(1),
+    })
+    assert session.ready
+    assert session.error is None
+
+
+def test_remote_session_request_jump_to_queues_jump_request():
+    session = _make_session_with_identity()
+
+    session.request_jump_to(Position(6, 4))
+
+    assert not session._outgoing.empty()
+    kind, payload = session._outgoing.get_nowait()
+    assert kind == "jump"
+    assert payload == {"row": 6, "col": 4}
+
+
+def test_remote_session_request_jump_to_ignores_opponent_piece():
+    pieces = [
+        {
+            "color": "b",
+            "piece_type": "P",
+            "row": 1,
+            "col": 4,
+            "state": "idle",
+        },
+    ]
+    session = _make_session_with_identity(color="w", pieces=pieces)
+
+    session.request_jump_to(Position(1, 4))
+
+    assert session._outgoing.empty()

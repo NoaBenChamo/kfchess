@@ -38,7 +38,7 @@ def format_move_notation(record):
     target = cols[record.target.col] + rows[record.target.row]
 
     if record.move_type == "jump":
-        return "→"
+        return f"JUMP {target}"
 
     if record.piece_type == "P":
         return target
@@ -82,9 +82,10 @@ class PlayerView:
         content_width = panel_width - 2 * PLAYER_PADDING
 
         title_y = panel_y + PLAYER_PADDING + 14
+        title = self._display_title(snapshot)
         cv2.putText(
             canvas,
-            self._title,
+            title,
             (content_x, title_y),
             self.FONT,
             PLAYER_TITLE_FONT_SCALE,
@@ -93,7 +94,22 @@ class PlayerView:
             cv2.LINE_AA,
         )
 
-        score_y = title_y + PLAYER_SCORE_LINE_HEIGHT
+        next_y = title_y + PLAYER_SCORE_LINE_HEIGHT
+        rating = self._display_rating(snapshot)
+        if rating is not None:
+            cv2.putText(
+                canvas,
+                f"ELO: {rating}",
+                (content_x, next_y),
+                self.FONT,
+                PLAYER_SCORE_FONT_SCALE,
+                PLAYER_TITLE_COLOR,
+                1,
+                cv2.LINE_AA,
+            )
+            next_y += PLAYER_SCORE_LINE_HEIGHT
+
+        score_y = next_y
         cv2.putText(
             canvas,
             f"Score: {score}",
@@ -123,6 +139,24 @@ class PlayerView:
             return snapshot.white_moves, snapshot.white_score
 
         return snapshot.black_moves, snapshot.black_score
+
+    def _display_title(self, snapshot):
+        if self._side == "white":
+            name = getattr(snapshot, "white_username", None)
+        else:
+            name = getattr(snapshot, "black_username", None)
+        if name:
+            return str(name)
+        return self._title
+
+    def _display_rating(self, snapshot):
+        if self._side == "white":
+            rating = getattr(snapshot, "white_rating", None)
+        else:
+            rating = getattr(snapshot, "black_rating", None)
+        if rating is None:
+            return None
+        return rating
 
     def _draw_history_table(self, canvas, x, y, width, height, moves):
         cv2.rectangle(

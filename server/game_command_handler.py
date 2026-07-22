@@ -1,3 +1,4 @@
+from model.position import Position
 from shared.move_command import InvalidMoveCommand, parse_move_command
 from shared.protocol import NOT_YOUR_PIECE
 from shared.squares import square_to_position
@@ -65,5 +66,52 @@ class GameCommandHandler:
         return {
             "ok": True,
             "command": command_text,
+            "snapshot": snapshot,
+        }
+
+    def apply_jump_command(self, match, row, col, assigned_color=None):
+        position = Position(row, col)
+        engine = match.engine
+        board = engine.get_board()
+
+        if not board.is_inside(position):
+            return {
+                "ok": False,
+                "error_code": "INVALID_MOVE",
+                "error_message": "jump position out of bounds",
+            }
+
+        piece = board.get(position)
+        if piece is None:
+            return {
+                "ok": False,
+                "error_code": "INVALID_MOVE",
+                "error_message": "no piece to jump",
+            }
+
+        if assigned_color is not None and piece.color.lower() != assigned_color:
+            return {
+                "ok": False,
+                "error_code": NOT_YOUR_PIECE,
+                "error_message": "cannot jump opponent pieces",
+            }
+
+        engine.jump(position)
+        # engine.jump is a silent no-op when the piece is already moving.
+        if board.get(position) is piece:
+            return {
+                "ok": False,
+                "error_code": "INVALID_MOVE",
+                "error_message": "jump rejected by engine",
+            }
+
+        match._last_state_key = match._state_key()
+        sequence = match.bump_sequence()
+        snapshot = snapshot_to_dict(engine.create_snapshot(), sequence=sequence)
+
+        return {
+            "ok": True,
+            "row": row,
+            "col": col,
             "snapshot": snapshot,
         }

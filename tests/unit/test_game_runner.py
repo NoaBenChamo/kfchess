@@ -74,11 +74,45 @@ def test_game_runner_pumps_session_each_frame(monkeypatch):
     monkeypatch.setattr("view.game_runner.cv2.moveWindow", lambda *args, **kwargs: None)
     monkeypatch.setattr("view.game_runner.cv2.setMouseCallback", lambda *args, **kwargs: None)
     monkeypatch.setattr("view.game_runner.cv2.destroyWindow", lambda *args, **kwargs: None)
-    monkeypatch.setattr("view.game_runner.cv2.waitKey", lambda *args, **kwargs: -1)
+
+    def fake_wait_key(delay):
+        # Acknowledge game-over pause so the runner can exit.
+        if delay == 50:
+            return ord(" ")
+        return -1
+
+    monkeypatch.setattr("view.game_runner.cv2.waitKey", fake_wait_key)
 
     runner.run()
 
     assert len(session.pump_calls) >= 1
+    assert len(renderer.frames) >= 1
+    assert runner.return_to_lobby is True
+
+
+def test_game_runner_stops_on_connection_lost(monkeypatch):
+    class _LostSession(_FakeSession):
+        connection_lost = False
+
+        def pump(self, elapsed_ms):
+            super().pump(elapsed_ms)
+            self.connection_lost = True
+
+    session = _LostSession([_snapshot()])
+    renderer = _FakeRenderer()
+    runner = GameRunner(
+        session, _FakeController(), renderer, window_name="test-runner-lost"
+    )
+
+    monkeypatch.setattr("view.game_runner.cv2.namedWindow", lambda *args, **kwargs: None)
+    monkeypatch.setattr("view.game_runner.cv2.resizeWindow", lambda *args, **kwargs: None)
+    monkeypatch.setattr("view.game_runner.cv2.moveWindow", lambda *args, **kwargs: None)
+    monkeypatch.setattr("view.game_runner.cv2.setMouseCallback", lambda *args, **kwargs: None)
+    monkeypatch.setattr("view.game_runner.cv2.destroyWindow", lambda *args, **kwargs: None)
+    monkeypatch.setattr("view.game_runner.cv2.waitKey", lambda *args, **kwargs: -1)
+
+    runner.run()
+    assert session.connection_lost is True
     assert len(renderer.frames) >= 1
 
 
@@ -96,10 +130,66 @@ def test_game_runner_stops_when_session_snapshot_reports_game_over(monkeypatch):
 
     def fake_wait_key(delay):
         wait_calls.append(delay)
+        # Acknowledge game-over pause (50ms poll) with a keypress.
+        if delay == 50:
+            return ord(" ")
         return -1
 
     monkeypatch.setattr("view.game_runner.cv2.waitKey", fake_wait_key)
 
     runner.run()
 
-    assert 0 in wait_calls
+    assert 50 in wait_calls
+    assert runner.return_to_lobby is True
+
+
+def test_game_runner_exit_button_requests_leave_and_returns_to_lobby(monkeypatch):
+    from input.screen_rect import ScreenRect
+
+    class _LeaveSession(_FakeSession):
+        def __init__(self):
+            super().__init__([_snapshot()])
+            self.leave_calls = 0
+
+        def request_leave(self):
+            self.leave_calls += 1
+
+    session = _LeaveSession()
+    renderer = _FakeRenderer()
+    exit_rect = ScreenRect(100, 10, 110, 36)
+    mouse_cb = {}
+
+    def capture_mouse(name, callback):
+        mouse_cb["fn"] = callback
+
+    runner = GameRunner(
+        session,
+        _FakeController(),
+        renderer,
+        window_name="test-runner-exit",
+        exit_button_rect=exit_rect,
+    )
+
+    monkeypatch.setattr("view.game_runner.cv2.namedWindow", lambda *args, **kwargs: None)
+    monkeypatch.setattr("view.game_runner.cv2.resizeWindow", lambda *args, **kwargs: None)
+    monkeypatch.setattr("view.game_runner.cv2.moveWindow", lambda *args, **kwargs: None)
+    monkeypatch.setattr("view.game_runner.cv2.setMouseCallback", capture_mouse)
+    monkeypatch.setattr("view.game_runner.cv2.destroyWindow", lambda *args, **kwargs: None)
+
+    frames = {"n": 0}
+
+    def fake_wait_key(delay):
+        del delay
+        frames["n"] += 1
+        if frames["n"] == 1 and "fn" in mouse_cb:
+            import cv2
+
+            mouse_cb["fn"](cv2.EVENT_LBUTTONDOWN, exit_rect.x + 5, exit_rect.y + 5, 0, None)
+        return -1
+
+    monkeypatch.setattr("view.game_runner.cv2.waitKey", fake_wait_key)
+
+    runner.run()
+
+    assert session.leave_calls == 1
+    assert runner.return_to_lobby is True

@@ -93,6 +93,20 @@ class NetworkClient:
         await self.send_message("move", payload={"command": command})
         return await self.receive_until("move_accepted", also_accept_errors=True)
 
+    async def send_jump(self, row, col):
+        """Send a jump-in-place request for the piece at (row, col)."""
+        await self.send_message("jump_request", payload={"row": row, "col": col})
+        return await self.receive_until("jump_accepted", also_accept_errors=True)
+
+    async def leave_game(self):
+        """Voluntary leave / forfeit; returns leave_ok, game_over, or error."""
+        await self.send_message("leave_game", payload={})
+        return await self.receive_until(
+            "leave_ok",
+            also_accept_errors=True,
+            also_accept=("game_over",),
+        )
+
     async def receive_until(
         self,
         message_type,

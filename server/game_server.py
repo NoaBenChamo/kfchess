@@ -4,6 +4,7 @@ import uuid
 
 from server.auth_service import AuthError, AuthService
 from server.client_session import ClientSession
+from server.clock import SystemClock
 from server.config import (
     DISCONNECT_GRACE_MS,
     MATCHMAKING_ELO_RANGE,
@@ -17,7 +18,7 @@ from server.game_registry import GameRegistry
 from server.match import Match
 from server.matchmaker import Matchmaker
 from server.rating_service import RatingService
-from server.room_manager import RoomManager
+from server.room_manager import RoomManager, STATUS_WAITING
 from server.snapshot_serializer import snapshot_to_dict
 from shared.protocol import (
     INVALID_MESSAGE,
@@ -61,10 +62,12 @@ class GameServer:
         matchmaker=None,
         room_manager=None,
         disconnect_grace_ms=DISCONNECT_GRACE_MS,
+        clock=None,
     ):
         self._connections = set()
         self._sessions = {}
         self._registry = registry if registry is not None else GameRegistry()
+        self._clock = clock if clock is not None else SystemClock()
         if DEFAULT_GAME_ID not in self._registry:
             self._registry.create_default()
         self._commands = (
@@ -106,6 +109,7 @@ class GameServer:
             else Matchmaker(
                 elo_range=MATCHMAKING_ELO_RANGE,
                 timeout_ms=MATCHMAKING_TIMEOUT_MS,
+                clock=self._clock,
             )
         )
 
@@ -129,8 +133,7 @@ class GameServer:
         if self._started:
             return
         for match in self._registry.all_matches():
-            match.set_grace_ms(self._disconnect_grace_ms)
-            match.set_game_over_handler(self._on_match_game_over)
+            self._configure_match(match)
             await match.start_tick_loop(self._tick_ms)
         self._timeout_task = asyncio.create_task(
             self._matchmaking_timeout_loop(),
@@ -142,6 +145,17 @@ class GameServer:
             self._tick_ms,
             self._disconnect_grace_ms,
         )
+
+    def _configure_match(self, match):
+        match.set_clock(self._clock)
+        match.set_grace_ms(self._disconnect_grace_ms)
+        match.set_game_over_handler(self._on_match_game_over)
+        match.set_grace_expire_handler(self._on_grace_expired)
+
+    def _new_match(self, game_id):
+        match = Match(game_id, clock=self._clock)
+        self._configure_match(match)
+        return match
 
     async def stop(self):
         if self._timeout_task is not None:
@@ -200,8 +214,18 @@ class GameServer:
         if match is None:
             return
 
-        # Only players in an active game get a grace period.
+        # Incomplete private room / solo seat: discard immediately (no grace).
         if session.is_identified and session.role == "player":
+            room = (
+                self._rooms.get(match.room_id) if match.room_id is not None else None
+            )
+            incomplete = match.player_count() < 2 or (
+                room is not None and room.status == STATUS_WAITING
+            )
+            if incomplete:
+                await self._discard_incomplete_match(match, websocket, session)
+                return
+
             color = match.detach_player(websocket)
             if color is None:
                 return
@@ -219,7 +243,7 @@ class GameServer:
                     "grace_period_ms": self._disconnect_grace_ms,
                 },
             )
-            await match.begin_disconnect_grace(
+            match.begin_disconnect_grace(
                 color,
                 on_expire=self._on_grace_expired,
                 grace_ms=self._disconnect_grace_ms,
@@ -239,6 +263,23 @@ class GameServer:
             )
             await self._broadcast_room_update(match)
 
+    async def _discard_incomplete_match(self, match, websocket, session):
+        """Close a waiting/solo room so the code cannot be joined after creator leave."""
+        room_id = match.room_id
+        game_id = match.game_id
+        match.release(websocket)
+        if room_id is not None:
+            self._rooms.discard(room_id)
+            logger.info(
+                "waiting room discarded room_id=%s game_id=%s user_id=%s",
+                room_id,
+                game_id,
+                session.user_id,
+            )
+        if game_id != DEFAULT_GAME_ID:
+            await match.stop()
+            self._registry.unregister(game_id)
+
     async def _on_grace_expired(self, match, color):
         async with match.lock:
             seated = match.player_for_color(color)
@@ -247,6 +288,7 @@ class GameServer:
             if match.engine.is_game_over():
                 return
             match.engine.resign(color)
+            match.disconnect_forfeit = True
 
         await match.broadcast_snapshot()
         await self._on_match_game_over(match)
@@ -323,6 +365,14 @@ class GameServer:
 
         if message_type == "move":
             await self._handle_move(websocket, message)
+            return
+
+        if message_type == "jump_request":
+            await self._handle_jump(websocket, message)
+            return
+
+        if message_type == "leave_game":
+            await self._handle_leave_game(websocket, message)
             return
 
         logger.info(
@@ -513,9 +563,7 @@ class GameServer:
 
     async def _start_matched_game(self, white_session, black_session):
         game_id = f"g_{uuid.uuid4().hex[:12]}"
-        match = Match(game_id)
-        match.set_grace_ms(self._disconnect_grace_ms)
-        match.set_game_over_handler(self._on_match_game_over)
+        match = self._new_match(game_id)
         self._registry.register(match)
         if self._started:
             await match.start_tick_loop(self._tick_ms)
@@ -585,9 +633,7 @@ class GameServer:
         self._matchmaker.cancel(session.connection_id)
 
         game_id = f"g_{uuid.uuid4().hex[:12]}"
-        match = Match(game_id)
-        match.set_grace_ms(self._disconnect_grace_ms)
-        match.set_game_over_handler(self._on_match_game_over)
+        match = self._new_match(game_id)
         self._registry.register(match)
         if self._started:
             await match.start_tick_loop(self._tick_ms)
@@ -843,7 +889,12 @@ class GameServer:
             return
 
         winner = match.detect_winner_color()
-        reason = "king_captured" if winner is not None else "game_over"
+        if match.disconnect_forfeit:
+            reason = "disconnect"
+        elif winner is not None:
+            reason = "king_captured"
+        else:
+            reason = "game_over"
         logger.info(
             "game ended game_id=%s room_id=%s winner=%s reason=%s",
             match.game_id,
@@ -923,11 +974,24 @@ class GameServer:
             )
             return
 
+        if session.disconnected:
+            await websocket.send(
+                encode_error(INVALID_MESSAGE, "reconnect before sending moves")
+            )
+            return
+
         game_id = session.game_id or DEFAULT_GAME_ID
         match = self._registry.get(game_id)
         if match is None:
             await websocket.send(
                 encode_error(NOT_IN_GAME, "no active game")
+            )
+            return
+
+        seated = match.player_for_color(session.assigned_color)
+        if seated is None or seated.disconnected or seated is not session:
+            await websocket.send(
+                encode_error(INVALID_MESSAGE, "seat is disconnected")
             )
             return
 
@@ -958,6 +1022,166 @@ class GameServer:
             )
         )
         await match.broadcast_snapshot()
+
+    async def _handle_jump(self, websocket, message):
+        session = self._sessions.get(websocket)
+        if session is None:
+            await websocket.send(
+                encode_error(
+                    NOT_AUTHENTICATED,
+                    "join a game before sending jumps",
+                )
+            )
+            return
+
+        if session.role == "spectator":
+            await websocket.send(
+                encode_error(
+                    SPECTATOR_READ_ONLY,
+                    "spectators cannot jump pieces",
+                )
+            )
+            return
+
+        if not session.is_identified:
+            await websocket.send(
+                encode_error(
+                    NOT_AUTHENTICATED,
+                    "join a game before sending jumps",
+                )
+            )
+            return
+
+        if session.disconnected:
+            await websocket.send(
+                encode_error(INVALID_MESSAGE, "reconnect before sending jumps")
+            )
+            return
+
+        game_id = session.game_id or DEFAULT_GAME_ID
+        match = self._registry.get(game_id)
+        if match is None:
+            await websocket.send(
+                encode_error(NOT_IN_GAME, "no active game")
+            )
+            return
+
+        seated = match.player_for_color(session.assigned_color)
+        if seated is None or seated.disconnected or seated is not session:
+            await websocket.send(
+                encode_error(INVALID_MESSAGE, "seat is disconnected")
+            )
+            return
+
+        payload = message["payload"]
+        async with match.lock:
+            result = self._commands.apply_jump_command(
+                match,
+                payload["row"],
+                payload["col"],
+                assigned_color=session.assigned_color,
+            )
+
+        if not result["ok"]:
+            await websocket.send(
+                encode_error(
+                    result["error_code"],
+                    result["error_message"],
+                )
+            )
+            return
+
+        await websocket.send(
+            encode_message(
+                "jump_accepted",
+                payload={
+                    "row": result["row"],
+                    "col": result["col"],
+                    "snapshot": result["snapshot"],
+                },
+            )
+        )
+        await match.broadcast_snapshot()
+
+    async def _handle_leave_game(self, websocket, message):
+        """
+        Voluntary leave from the client Exit Game button.
+
+        Spectators leave without affecting the match.
+        Players forfeit immediately (same outcome as disconnect grace expiry).
+        """
+        del message
+        session = self._sessions.get(websocket)
+        if session is None:
+            await websocket.send(
+                encode_error(INVALID_MESSAGE, "unknown connection")
+            )
+            return
+
+        match = None
+        if session.game_id is not None:
+            match = self._registry.get(session.game_id)
+        if match is None:
+            match = self._registry.get(DEFAULT_GAME_ID)
+        if match is None:
+            await websocket.send(
+                encode_error(NOT_IN_GAME, "no active game")
+            )
+            return
+
+        if session.role == "spectator":
+            room_id = match.room_id
+            match.release(websocket)
+            if room_id is not None and session.user_id is not None:
+                self._rooms.remove_user(room_id, session.user_id)
+                await self._broadcast_room_update(match)
+            await websocket.send(
+                encode_message("leave_ok", payload={"role": "spectator"})
+            )
+            return
+
+        if session.role != "player" or session.assigned_color is None:
+            await websocket.send(
+                encode_error(NOT_IN_GAME, "not seated in a game")
+            )
+            return
+
+        room = self._rooms.get(match.room_id) if match.room_id else None
+        incomplete = match.player_count() < 2 or (
+            room is not None and room.status == STATUS_WAITING
+        )
+        if incomplete:
+            await self._discard_incomplete_match(match, websocket, session)
+            await websocket.send(
+                encode_message("leave_ok", payload={"role": "player"})
+            )
+            return
+
+        color = session.assigned_color
+        async with match.lock:
+            if match.engine.is_game_over():
+                match.release(websocket)
+                await websocket.send(
+                    encode_message("leave_ok", payload={"role": "player"})
+                )
+                return
+            match.engine.resign(color)
+            match.disconnect_forfeit = True
+
+        logger.info(
+            "player left game_id=%s color=%s user_id=%s",
+            match.game_id,
+            color,
+            session.user_id,
+        )
+        await match.broadcast_snapshot()
+        await self._on_match_game_over(match)
+        await websocket.send(
+            encode_message(
+                "leave_ok",
+                payload={"role": "player", "forfeit": True},
+            )
+        )
 
     def current_snapshot(self, game_id=DEFAULT_GAME_ID):
         match = self._registry.get(game_id)

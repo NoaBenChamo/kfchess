@@ -26,4 +26,27 @@ def test_format_move_notation_for_piece():
 def test_format_move_notation_for_jump():
     record = MoveRecord("w", "N", Position(2, 1), Position(2, 1), "jump")
 
-    assert format_move_notation(record) == "→"
+    assert format_move_notation(record) == "JUMP b6"
+
+
+def test_player_view_display_rating_reads_snapshot_fields():
+    from snapshots.game_snapshot import GameSnapshot
+    from view.hud.player_view import PlayerView
+
+    snapshot = GameSnapshot(
+        board_width=8,
+        board_height=8,
+        pieces=[],
+        selected_cell=None,
+        game_over=False,
+        white_username="Alice",
+        black_username="Bob",
+        white_rating=1200,
+        black_rating=1250,
+    )
+    white = PlayerView("white")
+    black = PlayerView("black")
+
+    assert white._display_rating(snapshot) == 1200
+    assert black._display_rating(snapshot) == 1250
+    assert white._display_rating(GameSnapshot(8, 8, [], None, False)) is None

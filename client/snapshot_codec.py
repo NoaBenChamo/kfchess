@@ -5,7 +5,15 @@ from snapshots.move_record import MoveRecord
 from snapshots.piece_snapshot import PieceSnapshot
 
 
-def snapshot_dict_to_game_snapshot(data, selected_cell=None):
+def snapshot_dict_to_game_snapshot(
+    data,
+    selected_cell=None,
+    white_username=None,
+    black_username=None,
+    white_rating=None,
+    black_rating=None,
+    hud_line=None,
+):
     """Rebuild a view-layer GameSnapshot from a network snapshot dict."""
     pieces = [_piece_from_dict(piece) for piece in data.get("pieces", [])]
     return GameSnapshot(
@@ -18,6 +26,11 @@ def snapshot_dict_to_game_snapshot(data, selected_cell=None):
         black_moves=[_move_from_dict(m) for m in data.get("black_moves", [])],
         white_score=data.get("white_score", 0),
         black_score=data.get("black_score", 0),
+        white_username=white_username,
+        black_username=black_username,
+        white_rating=white_rating,
+        black_rating=black_rating,
+        hud_line=hud_line,
     )
 
 

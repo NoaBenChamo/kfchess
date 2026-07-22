@@ -7,6 +7,9 @@ from config.constants import (
     FOOTER_HEIGHT,
     PLAYER_WIDTH,
     LABEL_MARGIN,
+    EXIT_BUTTON_WIDTH,
+    EXIT_BUTTON_HEIGHT,
+    EXIT_BUTTON_MARGIN,
 )
 
 
@@ -77,6 +80,13 @@ class GameLayout:
             y=HEADER_HEIGHT,
             width=PLAYER_WIDTH,
             height=board_canvas_height,
+        )
+
+        self._exit_button_rect = ScreenRect(
+            x=self._total_width - EXIT_BUTTON_WIDTH - EXIT_BUTTON_MARGIN,
+            y=max(0, (HEADER_HEIGHT - EXIT_BUTTON_HEIGHT) // 2),
+            width=EXIT_BUTTON_WIDTH,
+            height=EXIT_BUTTON_HEIGHT,
         )
 
         self._board_rect = self._create_board_rect(
@@ -155,6 +165,11 @@ class GameLayout:
     @property
     def right_player_rect(self):
         return self._right_player_rect
+
+    @property
+    def exit_button_rect(self):
+        """Header Exit Game control — outside the board hit area."""
+        return self._exit_button_rect
 
     @property
     def total_width(self):

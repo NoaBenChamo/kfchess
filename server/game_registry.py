@@ -7,6 +7,10 @@ class GameRegistry:
     def register(self, match):
         self._matches[match.game_id] = match
 
+    def unregister(self, game_id):
+        """Remove a match from the registry (no-op if missing)."""
+        return self._matches.pop(game_id, None)
+
     def get(self, game_id):
         return self._matches.get(game_id)
 

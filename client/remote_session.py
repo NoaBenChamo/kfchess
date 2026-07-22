@@ -2,10 +2,10 @@ import asyncio
 import logging
 import queue
 import threading
+import time
 
 from client.client_state import ClientState
 from client.network_client import NetworkClient
-from client.room_dialog import MODE_CREATE_ROOM, MODE_JOIN_ROOM, MODE_MATCHMAKING
 from client.snapshot_codec import piece_at
 from model.position import Position
 from shared.squares import position_to_square
@@ -13,6 +13,10 @@ from snapshots.game_snapshot import GameSnapshot
 
 
 logger = logging.getLogger(__name__)
+
+MODE_MATCHMAKING = "matchmaking"
+MODE_CREATE_ROOM = "create_room"
+MODE_JOIN_ROOM = "join_room"
 
 
 class IdentifyError(RuntimeError):
@@ -59,24 +63,59 @@ class RemoteSession:
         self._ready = threading.Event()
         self._stopped = threading.Event()
         self._startup_error = None
+        self._connection_lost = False
+        self._connection_lost_message = None
 
     @property
     def state(self):
         """Backward-compatible access to ClientState for tests and diagnostics."""
         return self._state
 
-    def start(self):
+    @property
+    def ready(self):
+        return (
+            self._ready.is_set()
+            and self._startup_error is None
+            and self._state.ready
+        )
+
+    @property
+    def error(self):
+        if self._ready.is_set() and self._startup_error is not None:
+            return self._startup_error
+        return None
+
+    @property
+    def connection_lost(self):
+        return self._connection_lost
+
+    @property
+    def connection_lost_message(self):
+        return self._connection_lost_message or "Connection lost"
+
+    def start_async(self):
         if self._thread is not None:
             return
+        self._startup_error = None
+        self._ready.clear()
+        self._stopped.clear()
         self._thread = threading.Thread(
             target=self._thread_main,
             name="remote-session",
             daemon=True,
         )
         self._thread.start()
-        # Matchmaking can wait up to ~60s; allow a little slack.
+
+    def start(self):
+        self.start_async()
         timeout = 70.0 if self._play_mode == MODE_MATCHMAKING else 15.0
-        if not self._ready.wait(timeout=timeout):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            self.pump(0)
+            if self._ready.is_set():
+                break
+            time.sleep(0.01)
+        if not self._ready.is_set():
             self.stop()
             raise TimeoutError("timed out waiting for match and snapshot")
         if self._startup_error is not None:
@@ -84,6 +123,10 @@ class RemoteSession:
             code = self._startup_error.get("code", "ERROR")
             message = self._startup_error.get("message", "matchmaking failed")
             raise IdentifyError(code, message)
+
+    def cancel(self):
+        self._outgoing.put(("cancel_matchmaking", None))
+        self.stop()
 
     def stop(self):
         self._stopped.set()
@@ -101,6 +144,13 @@ class RemoteSession:
             except queue.Empty:
                 break
             self._state.handle_message(message)
+            if message.get("type") == "error":
+                payload = message.get("payload") or {}
+                if payload.get("code") == "CONNECTION_LOST":
+                    self._connection_lost = True
+                    self._connection_lost_message = payload.get(
+                        "message", "Connection lost"
+                    )
 
     def create_snapshot(self) -> GameSnapshot:
         return self._state.create_snapshot()
@@ -150,8 +200,31 @@ class RemoteSession:
         self._state.clear_selection()
 
     def request_jump_to(self, target: Position) -> None:
-        del target
-        # Jump over the network is not wired yet.
+        if self._state.role == "spectator":
+            return
+
+        piece = piece_at(self._state.snapshot_dict, target)
+        if piece is None:
+            return
+
+        color, _piece_type = piece
+        assigned = self._state.assigned_color
+        if assigned is not None and color.lower() != assigned.lower():
+            return
+
+        self._outgoing.put(
+            ("jump", {"row": target.row, "col": target.col})
+        )
+
+    def request_leave(self) -> None:
+        """
+        Ask the server to leave the current game, then stop the session.
+
+        Players forfeit; spectators leave without affecting the match.
+        """
+        if self._stopped.is_set():
+            return
+        self._outgoing.put(("leave_game", None))
 
     @property
     def game_over(self) -> bool:
@@ -184,13 +257,41 @@ class RemoteSession:
                             continue
                         if item is None:
                             break
-                        kind, command = item
+                        kind = item[0]
+                        payload = item[1] if len(item) > 1 else None
                         if kind == "move":
                             logger.debug("send type=move")
                             await client.send_message(
                                 "move",
-                                payload={"command": command},
+                                payload={"command": payload},
                             )
+                        elif kind == "jump":
+                            logger.debug("send type=jump_request")
+                            await client.send_message(
+                                "jump_request",
+                                payload=payload,
+                            )
+                        elif kind == "cancel_matchmaking":
+                            await client.send_message(
+                                "cancel_matchmaking",
+                                payload={},
+                            )
+                        elif kind == "leave_game":
+                            logger.info("send type=leave_game")
+                            try:
+                                await client.send_message(
+                                    "leave_game",
+                                    payload={},
+                                )
+                                # Brief wait so game_over / leave_ok can arrive.
+                                await asyncio.sleep(0.15)
+                            except Exception:
+                                logger.debug(
+                                    "leave_game send failed",
+                                    exc_info=True,
+                                )
+                            self._stopped.set()
+                            break
                 finally:
                     receiver.cancel()
                     try:
@@ -199,70 +300,109 @@ class RemoteSession:
                         pass
         except Exception as exc:
             logger.exception("remote session connection error")
+            message = str(exc) or "Connection lost"
             if not self._ready.is_set():
                 self._startup_error = {
                     "code": "CONNECTION_ERROR",
-                    "message": str(exc),
+                    "message": message,
                 }
                 self._ready.set()
+            else:
+                self._connection_lost = True
+                self._connection_lost_message = message
+                self._incoming.put(
+                    {
+                        "type": "error",
+                        "payload": {
+                            "code": "CONNECTION_LOST",
+                            "message": message,
+                        },
+                    }
+                )
             raise
 
     async def _receive_loop(self, client):
         play_sent = False
-        while not self._stopped.is_set():
-            message = await client.receive_message()
-            message_type = message.get("type")
-            logger.debug("recv type=%s", message_type)
-            self._incoming.put(message)
-            if self._ready.is_set():
-                continue
-
-            self._state.handle_message(message)
-            if message_type == "error":
-                # Ignore play_request rejection if we were already restored into a game.
-                if (
-                    self._state.assigned_color is not None
-                    and (message.get("payload") or {}).get("message")
-                    == "already in a game"
-                ):
+        try:
+            while not self._stopped.is_set():
+                message = await client.receive_message()
+                message_type = message.get("type")
+                logger.debug("recv type=%s", message_type)
+                self._incoming.put(message)
+                if self._ready.is_set():
                     continue
-                self._startup_error = message.get("payload") or {
-                    "code": "ERROR",
-                    "message": "auth or matchmaking failed",
-                }
-                self._ready.set()
-                continue
 
-            if message_type == "matchmaking_timeout":
+                self._state.handle_message(message)
+                if message_type == "error":
+                    # Ignore play_request rejection if we were already restored.
+                    if (
+                        self._state.assigned_color is not None
+                        and (message.get("payload") or {}).get("message")
+                        == "already in a game"
+                    ):
+                        continue
+                    self._startup_error = message.get("payload") or {
+                        "code": "ERROR",
+                        "message": "auth or matchmaking failed",
+                    }
+                    self._ready.set()
+                    continue
+
+                if message_type == "matchmaking_timeout":
+                    self._startup_error = {
+                        "code": "MATCHMAKING_TIMEOUT",
+                        "message": "No suitable opponent found. Please try again.",
+                    }
+                    self._ready.set()
+                    continue
+
+                if message_type == "auth_ok" and not play_sent:
+                    play_sent = True
+
+                    async def _enter_play_unless_restored():
+                        await asyncio.sleep(0.05)
+                        if self._stopped.is_set() or self._state.ready:
+                            return
+                        if self._play_mode == MODE_CREATE_ROOM:
+                            logger.info("create_room")
+                            await client.send_message("create_room", payload={})
+                        elif self._play_mode == MODE_JOIN_ROOM:
+                            logger.info("join_room room_id=%s", self._room_id)
+                            await client.send_message(
+                                "join_room",
+                                payload={"room_id": self._room_id},
+                            )
+                        else:
+                            logger.info("play_request")
+                            await client.send_message("play_request", payload={})
+
+                    asyncio.create_task(_enter_play_unless_restored())
+                    continue
+
+                if self._state.ready:
+                    self._ready.set()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception("remote session receive loop ended")
+            message = str(exc) or "Connection lost"
+            if not self._ready.is_set():
                 self._startup_error = {
-                    "code": "MATCHMAKING_TIMEOUT",
-                    "message": "no opponent found in time",
+                    "code": "CONNECTION_ERROR",
+                    "message": message,
                 }
                 self._ready.set()
-                continue
-
-            if message_type == "auth_ok" and not play_sent:
-                play_sent = True
-
-                async def _enter_play_unless_restored():
-                    await asyncio.sleep(0.05)
-                    if self._stopped.is_set() or self._state.ready:
-                        return
-                    if self._play_mode == MODE_CREATE_ROOM:
-                        logger.info("create_room")
-                        await client.send_message("create_room", payload={})
-                    elif self._play_mode == MODE_JOIN_ROOM:
-                        logger.info("join_room room_id=%s", self._room_id)
-                        await client.send_message(
-                            "join_room",
-                            payload={"room_id": self._room_id},
-                        )
-                    else:
-                        logger.info("play_request")
-                        await client.send_message("play_request", payload={})
-
-                asyncio.create_task(_enter_play_unless_restored())
-                continue
-
-            if self._state.ready:
-                self._ready.set()
+            else:
+                self._connection_lost = True
+                self._connection_lost_message = message
+                self._incoming.put(
+                    {
+                        "type": "error",
+                        "payload": {
+                            "code": "CONNECTION_LOST",
+                            "message": message,
+                        },
+                    }
+                )
+            self._stopped.set()
+            self._outgoing.put(None)

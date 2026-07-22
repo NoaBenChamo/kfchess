@@ -47,6 +47,7 @@ class WindowRenderer:
             canvas,
             self._layout.header_rect,
             snapshot,
+            exit_button_rect=self._layout.exit_button_rect,
         )
 
         self._left_player_view.render(

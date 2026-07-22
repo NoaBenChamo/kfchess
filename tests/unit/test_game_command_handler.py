@@ -55,3 +55,32 @@ def test_apply_rejects_opponent_piece_for_assigned_color():
 
     assert result["ok"] is False
     assert result["error_code"] == "NOT_YOUR_PIECE"
+
+
+def test_apply_jump_in_place_returns_jump_snapshot():
+    match = Match("default")
+    handler = GameCommandHandler()
+
+    result = handler.apply_jump_command(match, row=6, col=4, assigned_color="w")
+
+    assert result["ok"] is True
+    assert result["row"] == 6
+    assert result["col"] == 4
+    assert any(
+        piece["piece_type"] == "P"
+        and piece["color"] == "w"
+        and piece["row"] == 6
+        and piece["col"] == 4
+        and piece["state"] == "jump"
+        for piece in result["snapshot"]["pieces"]
+    )
+
+
+def test_apply_jump_rejects_opponent_piece():
+    match = Match("default")
+    handler = GameCommandHandler()
+
+    result = handler.apply_jump_command(match, row=1, col=4, assigned_color="w")
+
+    assert result["ok"] is False
+    assert result["error_code"] == "NOT_YOUR_PIECE"
