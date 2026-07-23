@@ -6,6 +6,7 @@ from engine.game_engine import GameEngine
 from server.clock import SystemClock
 from server.opening_board import STANDARD_OPENING
 from server.snapshot_serializer import snapshot_to_dict
+from server.session_role_enum import SessionRole
 from shared.protocol import INVALID_MESSAGE, SERVER_FULL, USERNAME_TAKEN, encode_message
 
 logger = logging.getLogger(__name__)
@@ -141,7 +142,7 @@ class Match:
             }
 
         color = next(c for c in _PLAYER_COLORS if c not in self._players)
-        session.bind_player(username, color, self.game_id)
+        session.join_as_player(username, color, self.game_id)
         self._players[color] = session
         self._sessions_by_ws[session.websocket] = session
         self.add_connection(session.websocket)
@@ -167,18 +168,18 @@ class Match:
                 "error_code": USERNAME_TAKEN,
                 "error_message": "username already seated in this match",
             }
-        session.bind_player(username, color, self.game_id)
+        session.join_as_player(username, color, self.game_id)
         self._players[color] = session
         self._sessions_by_ws[session.websocket] = session
         self.add_connection(session.websocket)
         return {"ok": True, "color": color}
 
     def add_spectator(self, session, username):
-        session.bind_spectator(username, self.game_id)
+        session.join_as_spectator(username, self.game_id)
         self._spectators[session.connection_id] = session
         self._sessions_by_ws[session.websocket] = session
         self.add_connection(session.websocket)
-        return {"ok": True, "role": "spectator"}
+        return {"ok": True, "role": SessionRole.SPECTATOR}
 
     def room_membership_payload(self):
         players = {}
@@ -210,7 +211,7 @@ class Match:
                 if self._players.get(session.assigned_color) is session:
                     del self._players[session.assigned_color]
             self._spectators.pop(session.connection_id, None)
-            session.clear_identity()
+            session.leave_game()
         self.remove_connection(websocket)
         return session
 
@@ -227,19 +228,19 @@ class Match:
         if session is None:
             return None
 
-        if session.role == "spectator":
+        if session.role == SessionRole.SPECTATOR:
             self._spectators.pop(session.connection_id, None)
-            session.clear_seat()
+            session.leave_game()
             return None
 
-        if session.role != "player" or session.assigned_color is None:
+        if session.role != SessionRole.PLAYER or session.assigned_color is None:
             return None
 
         if self.engine.is_game_over():
             color = session.assigned_color
             if self._players.get(color) is session:
                 del self._players[color]
-            session.clear_seat()
+            session.leave_game()
             return None
 
         session.disconnected = True
@@ -285,8 +286,8 @@ class Match:
             if seated.user_id != user_id or not seated.disconnected:
                 continue
             self.cancel_grace(color)
-            new_session.bind_user(seated.user_id, seated.username, seated.rating)
-            new_session.bind_player(seated.username, color, self.game_id)
+            new_session.set_user(seated.user_id, seated.username, seated.rating)
+            new_session.join_as_player(seated.username, color, self.game_id)
             new_session.disconnected = False
             self._players[color] = new_session
             self._sessions_by_ws[new_session.websocket] = new_session
@@ -294,13 +295,13 @@ class Match:
             return color
         return None
 
-    def clear_seats(self):
+    def leave_all_players(self):
         for color in list(self._grace_deadlines):
             self.cancel_grace(color)
         for session in list(self._players.values()):
-            session.clear_seat()
+            session.leave_game()
         for session in list(self._spectators.values()):
-            session.clear_seat()
+            session.leave_game()
         self._players.clear()
         self._spectators.clear()
         self._sessions_by_ws.clear()
@@ -377,18 +378,34 @@ class Match:
             sequence=self.sequence,
         )
 
+    def is_result_recorded(self):
+        return self._result_recorded
+
+    def mark_result_recorded(self):
+        self._result_recorded = True
+
     async def broadcast_snapshot(self):
         payload = self.snapshot_payload()
         message = encode_message("state_snapshot", payload=payload)
-        await self._broadcast_raw(message)
+        await self.broadcast_raw(message)
 
     async def broadcast_message(self, message_type, payload):
         message = encode_message(message_type, payload=payload)
-        await self._broadcast_raw(message)
+        await self.broadcast_raw(message)
 
-    async def _broadcast_raw(self, message):
+    async def broadcast_raw(self, message, exclude=None):
+        """Send a pre-encoded message to all match connections.
+
+        ``exclude`` may be a websocket or an object with a ``.websocket`` attr.
+        """
+        exclude_ws = None
+        if exclude is not None:
+            exclude_ws = getattr(exclude, "websocket", exclude)
+
         dead = []
         for websocket in list(self._connections):
+            if exclude_ws is not None and websocket is exclude_ws:
+                continue
             try:
                 await websocket.send(message)
             except Exception:

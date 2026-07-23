@@ -3,6 +3,7 @@ from server.room_manager import (
     STATUS_WAITING,
     RoomManager,
 )
+from server.session_role_enum import SessionRole
 from shared.protocol import ROOM_NOT_FOUND
 
 
@@ -26,13 +27,13 @@ def test_second_join_is_black_third_is_spectator():
     manager.create("g1", creator_user_id=1)
 
     black = manager.join("ROOM01", user_id=2)
-    assert black == {"ok": True, "role": "player", "color": "b"}
+    assert black == {"ok": True, "role": SessionRole.PLAYER, "color": "b"}
     room = manager.get("room01")
     assert room.black_user_id == 2
     assert room.status == STATUS_PLAYING
 
     spectator = manager.join("ROOM01", user_id=3)
-    assert spectator == {"ok": True, "role": "spectator", "color": None}
+    assert spectator == {"ok": True, "role": SessionRole.SPECTATOR, "color": None}
     assert room.spectator_user_ids == [3]
 
 

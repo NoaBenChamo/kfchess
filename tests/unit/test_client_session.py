@@ -1,5 +1,6 @@
 from server.client_session import ClientSession
 from server.match import Match
+from server.session_role_enum import SessionRole
 from shared.protocol import SERVER_FULL, USERNAME_TAKEN
 
 
@@ -10,20 +11,20 @@ class _FakeSocket:
 def test_client_session_starts_unidentified():
     session = ClientSession(_FakeSocket(), connection_id="c1")
     assert session.connection_id == "c1"
-    assert not session.is_identified
+    assert not session.is_in_game
     assert session.username is None
     assert session.assigned_color is None
 
 
-def test_client_session_bind_player_sets_identity():
+def test_client_session_join_as_player_sets_identity():
     session = ClientSession(_FakeSocket())
-    session.bind_player("Noa", "w", "default")
+    session.join_as_player("Noa", "w", "default")
 
-    assert session.is_identified
+    assert session.is_in_game
     assert session.username == "Noa"
     assert session.assigned_color == "w"
     assert session.game_id == "default"
-    assert session.role == "player"
+    assert session.role == SessionRole.PLAYER
 
 
 def test_first_assign_is_white_second_is_black():
@@ -53,7 +54,7 @@ def test_third_assign_returns_server_full():
 
     assert result["ok"] is False
     assert result["error_code"] == SERVER_FULL
-    assert not third.is_identified
+    assert not third.is_in_game
     assert match.player_count() == 2
 
 
@@ -79,7 +80,7 @@ def test_release_frees_seat_for_next_player():
     released = match.release(first.websocket)
 
     assert released is first
-    assert not first.is_identified
+    assert not first.is_in_game
     assert match.player_count() == 1
     assert match.session_for(first.websocket) is None
     assert first.websocket not in match._connections

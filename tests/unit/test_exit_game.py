@@ -9,6 +9,7 @@ from client.network_client import NetworkClient
 from client.remote_ui import run_remote_ui
 from server.dal.database import Database
 from server.game_server import GameServer
+from server.session_role_enum import SessionRole
 from view.game_runner import GameRunner
 
 
@@ -116,12 +117,12 @@ async def test_spectator_leave_game_does_not_end_match():
         await black.receive_until("state_snapshot")
 
         spec = await spectator.join_room(room_id)
-        assert spec["payload"]["role"] == "spectator"
+        assert spec["payload"]["role"] == SessionRole.SPECTATOR
         await spectator.receive_until("state_snapshot")
 
         left = await spectator.leave_game()
         assert left["type"] == "leave_ok"
-        assert left["payload"]["role"] == "spectator"
+        assert left["payload"]["role"] == SessionRole.SPECTATOR
 
         match = game_server.registry.get(game_id)
         assert match.spectator_count() == 0

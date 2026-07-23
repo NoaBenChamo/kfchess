@@ -69,7 +69,7 @@ async def test_play_request_outside_elo_range_does_not_match():
             users.update_rating(bob.id, 1500)
 
             # Refresh session rating by logging in again is hard mid-connection;
-            # bind_user already set 1200. Update session rating manually:
+            # set_user already set 1200. Update session rating manually:
             for session in game_server._sessions.values():
                 if session.username == "Bob":
                     session.rating = 1500

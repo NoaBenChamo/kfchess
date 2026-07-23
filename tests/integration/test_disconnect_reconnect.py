@@ -9,6 +9,7 @@ from client.network_client import NetworkClient
 from server.clock import FakeClock
 from server.dal.database import Database
 from server.game_server import GameServer
+from server.session_role_enum import SessionRole
 from shared.protocol import ROOM_NOT_FOUND
 
 
@@ -299,7 +300,7 @@ async def test_spectator_disconnect_keeps_game_alive():
         await black.receive_until("state_snapshot")
 
         spec = await spectator.join_room(room_id)
-        assert spec["payload"]["role"] == "spectator"
+        assert spec["payload"]["role"] == SessionRole.SPECTATOR
         await spectator.receive_until("state_snapshot")
 
         await spectator.close()

@@ -6,6 +6,7 @@ from websockets.asyncio.server import serve
 from client.network_client import NetworkClient
 from server.dal.database import Database
 from server.game_server import GameServer
+from server.session_role_enum import SessionRole
 from shared.protocol import ROOM_NOT_FOUND, SPECTATOR_READ_ONLY
 
 
@@ -35,7 +36,7 @@ async def test_create_room_unique_and_creator_is_white():
             assert (await client.register("Alice", "secret1"))["type"] == "auth_ok"
             room = await client.create_room()
             assert room["type"] == "room_update"
-            assert room["payload"]["role"] == "player"
+            assert room["payload"]["role"] == SessionRole.PLAYER
             assert room["payload"]["color"] == "w"
             assert room["payload"]["room_id"]
             assert room["payload"]["players"]["w"]["username"] == "Alice"
@@ -69,7 +70,7 @@ async def test_second_joiner_is_black_third_is_spectator_readonly():
             await white.receive_until("state_snapshot")
 
             joined_black = await black.join_room(room_id)
-            assert joined_black["payload"]["role"] == "player"
+            assert joined_black["payload"]["role"] == SessionRole.PLAYER
             assert joined_black["payload"]["color"] == "b"
             await black.receive_until("identity_assigned")
             await black.receive_until("match_found")
@@ -80,7 +81,7 @@ async def test_second_joiner_is_black_third_is_spectator_readonly():
             assert update["payload"]["players"]["b"]["username"] == "Bob"
 
             joined_spec = await spectator.join_room(room_id)
-            assert joined_spec["payload"]["role"] == "spectator"
+            assert joined_spec["payload"]["role"] == SessionRole.SPECTATOR
             assert "color" not in joined_spec["payload"]
             snap_spec = await spectator.receive_until("state_snapshot")
             assert snap_spec["payload"]["pieces"] == snap_black["payload"]["pieces"]

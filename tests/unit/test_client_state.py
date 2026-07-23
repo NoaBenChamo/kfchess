@@ -6,6 +6,7 @@ from client.snapshot_codec import (
     piece_at,
     snapshot_dict_to_game_snapshot,
 )
+from server.session_role_enum import SessionRole
 
 
 def _sample_snapshot(sequence=0):
@@ -76,7 +77,7 @@ def test_client_state_identity_assigned_stores_color():
 
     assert state.username == "Noa"
     assert state.assigned_color == "b"
-    assert state.role == "player"
+    assert state.role == SessionRole.PLAYER
     assert state.ready is False
 
     state.handle_message({
@@ -96,7 +97,7 @@ def test_client_state_private_room_waits_for_both_players():
             "players": {"w": {"username": "Alice"}},
             "spectators": [],
             "status": "waiting",
-            "role": "player",
+            "role": SessionRole.PLAYER,
             "color": "w",
         },
     })
@@ -158,14 +159,14 @@ def test_client_state_spectator_ready_without_color():
             },
             "spectators": [{"username": "Carol"}],
             "status": "playing",
-            "role": "spectator",
+            "role": SessionRole.SPECTATOR,
         },
     })
     state.handle_message({
         "type": "state_snapshot",
         "payload": _sample_snapshot(1),
     })
-    assert state.role == "spectator"
+    assert state.role == SessionRole.SPECTATOR
     assert state.assigned_color is None
     assert state.room_id == "AB12CD"
     assert state.ready is True
@@ -224,7 +225,7 @@ def test_client_state_ratings_from_room_players():
             },
             "spectators": [],
             "status": "playing",
-            "role": "player",
+            "role": SessionRole.PLAYER,
             "color": "w",
         },
     })

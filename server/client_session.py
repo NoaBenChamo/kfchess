@@ -1,6 +1,8 @@
 import itertools
 import uuid
 
+from server.session_role_enum import SessionRole
+
 
 _connection_counter = itertools.count(1)
 
@@ -11,10 +13,8 @@ def _next_connection_id():
 
 class ClientSession:
     """
-    Per-connection identity for a networked client (Stage C/E).
-
-    Distinct from PlaySession — this is server-side connection membership,
-    not the UI play port.
+    ClientSession represents the state of a single WebSocket connection to the server.
+    This is the identity of the connection between the server and the client.
     """
 
     def __init__(self, websocket, connection_id=None):
@@ -33,35 +33,30 @@ class ClientSession:
         return self.user_id is not None
 
     @property
-    def is_identified(self):
+    def is_in_game(self):
         return self.assigned_color is not None and self.username is not None
 
-    def bind_user(self, user_id, username, rating):
+    def set_user(self, user_id, username, rating):
         self.user_id = user_id
         self.username = username
         self.rating = rating
 
-    def bind_player(self, username, color, game_id):
+    def join_as_player(self, username, color, game_id):
         self.username = username
         self.assigned_color = color
         self.game_id = game_id
-        self.role = "player"
+        self.role = SessionRole.PLAYER
         self.disconnected = False
 
-    def bind_spectator(self, username, game_id):
+    def join_as_spectator(self, username, game_id):
         self.username = username
         self.assigned_color = None
         self.game_id = game_id
-        self.role = "spectator"
+        self.role = SessionRole.SPECTATOR
         self.disconnected = False
 
-    def clear_seat(self):
-        """Release match seat / spectator slot without clearing authentication."""
+    def leave_game(self):
         self.assigned_color = None
         self.game_id = None
         self.role = None
         self.disconnected = False
-
-    def clear_identity(self):
-        """Backward-compatible alias: clear seat only (keep auth)."""
-        self.clear_seat()

@@ -10,6 +10,7 @@ from client.snapshot_codec import piece_at
 from model.position import Position
 from shared.squares import position_to_square
 from snapshots.game_snapshot import GameSnapshot
+from server.session_role_enum import SessionRole
 
 
 logger = logging.getLogger(__name__)
@@ -159,7 +160,7 @@ class RemoteSession:
         return self._state.selected
 
     def select(self, position: Position) -> None:
-        if self._state.role == "spectator":
+        if self._state.role == SessionRole.SPECTATOR:
             return
         piece = piece_at(self._state.snapshot_dict, position)
         if piece is None:
@@ -174,7 +175,7 @@ class RemoteSession:
         self._state.clear_selection()
 
     def request_move_to(self, target: Position) -> None:
-        if self._state.role == "spectator":
+        if self._state.role == SessionRole.SPECTATOR:
             return
         selected = self._state.selected
         if selected is None:
@@ -200,7 +201,7 @@ class RemoteSession:
         self._state.clear_selection()
 
     def request_jump_to(self, target: Position) -> None:
-        if self._state.role == "spectator":
+        if self._state.role == SessionRole.SPECTATOR:
             return
 
         piece = piece_at(self._state.snapshot_dict, target)

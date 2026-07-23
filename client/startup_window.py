@@ -13,6 +13,7 @@ from client.remote_session import (
     MODE_MATCHMAKING,
     RemoteSession,
 )
+from server.session_role_enum import SessionRole
 
 WINDOW_NAME = "KFChess"
 WIDTH = 640
@@ -71,6 +72,90 @@ class StartupWindow:
         self._result = None
         self._pending_auth_mode = None
 
+    # --- Public state-transition API (testable without OpenCV) ---
+
+    @property
+    def phase(self):
+        return self._phase
+
+    @property
+    def status(self):
+        return self._status
+
+    @property
+    def error(self):
+        return self._error
+
+    @property
+    def result(self):
+        return self._result
+
+    def handle_login(self):
+        """Start login authentication (same as clicking Login)."""
+        self._begin_auth("login")
+
+    def handle_register(self):
+        """Start registration (same as clicking Register)."""
+        self._begin_auth("register")
+
+    def handle_key(self, key):
+        """Apply a keyboard event to the current phase."""
+        if self._phase in (PHASE_WAITING, PHASE_AUTHING):
+            if self._phase == PHASE_WAITING and key in (ord("c"), ord("C")):
+                self._cancel_waiting()
+            return
+
+        # Normalize common special keys across OpenCV backends.
+        if key in (9,):
+            fields = self._active_fields()
+            if fields:
+                try:
+                    index = fields.index(self._focus_field)
+                except ValueError:
+                    index = 0
+                self._focus_field = fields[(index + 1) % len(fields)]
+            return
+        if key in (8, 65288, 65535):  # Backspace variants
+            self._edit_focused(backspace=True)
+            return
+        if key in (13, 10):  # Enter
+            if self._phase == PHASE_AUTH:
+                self.handle_login()
+            return
+
+        code = key & 0xFF
+        if key >= 0x100000:
+            return
+        if 32 <= code <= 126:
+            self._edit_focused(chr(code))
+
+    def handle_click(self, x, y):
+        """Apply a left-click at (x, y) — hit targets or field focus."""
+        self._mouse_pos = (x, y)
+        if self._phase == PHASE_AUTHING:
+            return
+        for rect in self._hit_targets():
+            if rect.contains(x, y) and rect.action is not None:
+                rect.action()
+                return
+        fields = self._active_fields()
+        for index, rect in enumerate(self._field_rects()):
+            if rect.contains(x, y) and index < len(fields):
+                self._focus_field = fields[index]
+                self._refocus_window()
+                return
+
+    def tick(self):
+        """
+        Advance non-drawing phase work (auth / waiting).
+
+        Call from the OpenCV loop or from headless tests after handle_*.
+        """
+        if self._phase == PHASE_AUTHING:
+            self._tick_auth()
+        elif self._phase == PHASE_WAITING:
+            self._tick_waiting()
+
     def run(self):
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(WINDOW_NAME, WIDTH, HEIGHT)
@@ -78,17 +163,14 @@ class StartupWindow:
 
         try:
             while self._running:
-                if self._phase == PHASE_AUTHING:
-                    self._tick_auth()
-                elif self._phase == PHASE_WAITING:
-                    self._tick_waiting()
+                self.tick()
                 frame = self._draw()
                 cv2.imshow(WINDOW_NAME, frame)
                 for key in self._poll_keys():
                     if key in (27,):  # Esc
                         self._running = False
                         break
-                    self._handle_key(key)
+                    self.handle_key(key)
                 if not self._running:
                     break
         finally:
@@ -138,7 +220,7 @@ class StartupWindow:
             room = state.room_id or "..."
             self._status = f"Waiting for opponent...  Room {room}"
         elif self._play_mode == MODE_JOIN_ROOM:
-            if state.role == "spectator":
+            if state.role == SessionRole.SPECTATOR:
                 self._status = "Room is full — joining as spectator"
             else:
                 room = self._room_id or state.room_id or "..."
@@ -174,7 +256,7 @@ class StartupWindow:
         self._status = ""
         self._error = ""
 
-    def _go_lobby(self, auth_mode):
+    def _begin_auth(self, auth_mode):
         if not self._username.strip():
             self._error = "Username is required"
             return
@@ -185,6 +267,10 @@ class StartupWindow:
         self._error = ""
         self._status = "Authenticating..."
         self._phase = PHASE_AUTHING
+
+    def _go_lobby(self, auth_mode):
+        """Backward-compatible alias used by older unit tests."""
+        self._begin_auth(auth_mode)
 
     def _tick_auth(self):
         auth_mode = self._pending_auth_mode or "login"
@@ -235,36 +321,6 @@ class StartupWindow:
                 },
             }
 
-    def _handle_key(self, key):
-        if self._phase in (PHASE_WAITING, PHASE_AUTHING):
-            if self._phase == PHASE_WAITING and key in (ord("c"), ord("C")):
-                self._cancel_waiting()
-            return
-
-        # Normalize common special keys across OpenCV backends.
-        if key in (9,):
-            fields = self._active_fields()
-            if fields:
-                try:
-                    index = fields.index(self._focus_field)
-                except ValueError:
-                    index = 0
-                self._focus_field = fields[(index + 1) % len(fields)]
-            return
-        if key in (8, 65288, 65535):  # Backspace variants
-            self._edit_focused(backspace=True)
-            return
-        if key in (13, 10):  # Enter
-            if self._phase == PHASE_AUTH:
-                self._go_lobby("login")
-            return
-
-        code = key & 0xFF
-        if key >= 0x100000:
-            return
-        if 32 <= code <= 126:
-            self._edit_focused(chr(code))
-
     def _active_fields(self):
         if self._phase == PHASE_AUTH:
             return ["username", "password"]
@@ -294,18 +350,7 @@ class StartupWindow:
         self._mouse_pos = (x, y)
         if event != cv2.EVENT_LBUTTONDOWN:
             return
-        if self._phase == PHASE_AUTHING:
-            return
-        for rect in self._hit_targets():
-            if rect.contains(x, y) and rect.action is not None:
-                rect.action()
-                return
-        fields = self._active_fields()
-        for index, rect in enumerate(self._field_rects()):
-            if rect.contains(x, y) and index < len(fields):
-                self._focus_field = fields[index]
-                self._refocus_window()
-                return
+        self.handle_click(x, y)
 
     def _refocus_window(self):
         """Ensure the OpenCV window keeps receiving keystrokes after a click."""
@@ -329,8 +374,8 @@ class StartupWindow:
         rects = []
         if self._phase == PHASE_AUTH:
             rects.extend([
-                _Rect(120, 250, 180, 40, "Login", lambda: self._go_lobby("login")),
-                _Rect(340, 250, 180, 40, "Register", lambda: self._go_lobby("register")),
+                _Rect(120, 250, 180, 40, "Login", self.handle_login),
+                _Rect(340, 250, 180, 40, "Register", self.handle_register),
             ])
         elif self._phase == PHASE_LOBBY:
             rects.extend([
@@ -350,6 +395,8 @@ class StartupWindow:
         self._error = ""
         self._status = ""
         self._focus_field = "username"
+
+    # --- Drawing only (no state transitions) ---
 
     def _draw(self):
         canvas = np.full((HEIGHT, WIDTH, 3), BG, dtype=np.uint8)

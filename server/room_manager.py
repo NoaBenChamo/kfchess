@@ -1,6 +1,8 @@
 import secrets
 import string
 
+from server.session_role_enum import SessionRole
+
 
 ROOM_ID_ALPHABET = string.ascii_uppercase + string.digits
 ROOM_ID_LENGTH = 6
@@ -70,7 +72,7 @@ class RoomManager:
         Assign join role for an authenticated user.
 
         Returns:
-            {"ok": True, "role": "player"|"spectator", "color": "w"|"b"|None}
+            {"ok": True, "role": SessionRole.PLAYER|SessionRole.SPECTATOR, "color": "w"|"b"|None}
             or {"ok": False, "error_code": ..., "error_message": ...}
         """
         from shared.protocol import INVALID_MESSAGE, ROOM_NOT_FOUND
@@ -97,15 +99,15 @@ class RoomManager:
         if room.white_user_id is None:
             room.white_user_id = user_id
             room.status = STATUS_WAITING
-            return {"ok": True, "role": "player", "color": "w"}
+            return {"ok": True, "role": SessionRole.PLAYER, "color": "w"}
 
         if room.black_user_id is None:
             room.black_user_id = user_id
             room.status = STATUS_PLAYING
-            return {"ok": True, "role": "player", "color": "b"}
+            return {"ok": True, "role": SessionRole.PLAYER, "color": "b"}
 
         room.spectator_user_ids.append(user_id)
-        return {"ok": True, "role": "spectator", "color": None}
+        return {"ok": True, "role": SessionRole.SPECTATOR, "color": None}
 
     def remove_user(self, room_id, user_id):
         room = self.get(room_id)

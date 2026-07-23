@@ -1,5 +1,6 @@
 from client.snapshot_codec import snapshot_dict_to_game_snapshot
-
+from server.session_role_enum import SessionRole
+        
 
 class ClientState:
     """
@@ -31,7 +32,7 @@ class ClientState:
         # Explicitly stay on the waiting screen while queued for matchmaking.
         if self.matchmaking_waiting:
             return False
-        if self.role == "spectator":
+        if self.role == SessionRole.SPECTATOR:
             return True
         if self.assigned_color is None:
             return False
@@ -60,7 +61,7 @@ class ClientState:
         if message_type == "match_found":
             self.assigned_color = payload.get("color")
             self.game_id = payload.get("game_id")
-            self.role = "player"
+            self.role = SessionRole.PLAYER
             self.matchmaking_waiting = False
             opponent = payload.get("opponent") or {}
             self.opponent_username = opponent.get("username") or self.opponent_username
@@ -92,7 +93,7 @@ class ClientState:
             if "players" in payload:
                 self.players = payload.get("players") or {}
             if payload.get("role") is not None:
-                self.role = payload.get("role")
+                self.role = SessionRole(payload.get("role"))
             if payload.get("color") is not None:
                 self.assigned_color = payload.get("color")
             self.last_error = None
@@ -119,7 +120,7 @@ class ClientState:
             self.username = payload.get("username")
             self.assigned_color = payload.get("color")
             self.game_id = payload.get("game_id")
-            self.role = "player"
+            self.role = SessionRole.PLAYER
             self.last_error = None
             return
 
@@ -186,7 +187,7 @@ class ClientState:
             white = white_info.get("username")
             black = black_info.get("username")
 
-        if self.role == "spectator":
+        if self.role == SessionRole.SPECTATOR:
             return white, black
 
         if self.assigned_color == "w":
@@ -207,7 +208,7 @@ class ClientState:
             white = white_info.get("rating")
             black = black_info.get("rating")
 
-        if self.role == "spectator":
+        if self.role == SessionRole.SPECTATOR:
             return white, black
 
         if self.assigned_color == "w":
@@ -225,7 +226,7 @@ class ClientState:
             parts.append(f"Private Room {self.room_id}")
         else:
             parts.append("Matchmaking")
-        if self.role == "spectator":
+        if self.role == SessionRole.SPECTATOR:
             parts.append("Spectator — read only")
         if self.disconnect_notice is not None:
             color = self.disconnect_notice.get("color")
